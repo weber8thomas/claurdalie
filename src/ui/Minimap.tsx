@@ -7,7 +7,7 @@ import { GAP_CODE } from '../core/alphabet'
 const MMW = 180
 const MMH = 120
 
-export function Minimap({ ctrl }: { ctrl: EditorController }) {
+export function Minimap({ ctrl, onClose }: { ctrl: EditorController; onClose: () => void }) {
   const snap = useEditorSnapshot(ctrl)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const offRef = useRef<HTMLCanvasElement | null>(null)
@@ -69,15 +69,28 @@ export function Minimap({ ctrl }: { ctrl: EditorController }) {
     const totalW = ctrl.store.width * r.cellW
     const totalH = ctrl.store.height * r.cellH
     if (totalW <= 0 || totalH <= 0) return
-    const rx = (r.scrollX / totalW) * MMW
-    const ry = (r.scrollY / totalH) * MMH
-    const rw = Math.max(4, (r.gridWidthPx / totalW) * MMW)
-    const rh = Math.max(4, (r.gridHeightPx / totalH) * MMH)
-    ctx.strokeStyle = snap.dark ? '#5b8dff' : '#2f6df6'
-    ctx.lineWidth = 1.5
-    ctx.strokeRect(rx + 0.5, ry + 0.5, Math.min(rw, MMW - rx), Math.min(rh, MMH - ry))
-    ctx.fillStyle = snap.dark ? 'rgba(91,141,255,0.12)' : 'rgba(47,109,246,0.12)'
-    ctx.fillRect(rx, ry, Math.min(rw, MMW - rx), Math.min(rh, MMH - ry))
+    const rw = Math.max(6, (r.gridWidthPx / totalW) * MMW)
+    const rh = Math.max(6, (r.gridHeightPx / totalH) * MMH)
+    const x0 = Math.max(0, Math.min((r.scrollX / totalW) * MMW, MMW - rw))
+    const y0 = Math.max(0, Math.min((r.scrollY / totalH) * MMH, MMH - rh))
+    const x1 = Math.min(MMW, x0 + rw)
+    const y1 = Math.min(MMH, y0 + rh)
+    // Dim everything outside the current viewport so the location pops.
+    ctx.fillStyle = snap.dark ? 'rgba(6,7,10,0.58)' : 'rgba(20,24,32,0.42)'
+    ctx.fillRect(0, 0, MMW, y0)
+    ctx.fillRect(0, y1, MMW, MMH - y1)
+    ctx.fillRect(0, y0, x0, y1 - y0)
+    ctx.fillRect(x1, y0, MMW - x1, y1 - y0)
+    // Bright border + subtle inner tint on the viewport rectangle.
+    const accent = snap.dark ? '#7aa2ff' : '#2f6df6'
+    ctx.fillStyle = snap.dark ? 'rgba(122,162,255,0.14)' : 'rgba(47,109,246,0.12)'
+    ctx.fillRect(x0, y0, x1 - x0, y1 - y0)
+    ctx.strokeStyle = accent
+    ctx.lineWidth = 2
+    ctx.strokeRect(x0 + 1, y0 + 1, x1 - x0 - 2, y1 - y0 - 2)
+    ctx.strokeStyle = snap.dark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.7)'
+    ctx.lineWidth = 1
+    ctx.strokeRect(x0 + 0.5, y0 + 0.5, x1 - x0 - 1, y1 - y0 - 1)
   }
 
   // Redraw the viewport rectangle whenever the grid view changes (scroll/zoom).
@@ -96,6 +109,9 @@ export function Minimap({ ctrl }: { ctrl: EditorController }) {
 
   return (
     <div className="minimap" style={{ width: MMW, height: MMH }}>
+      <button className="mm-close" title="Hide minimap" onClick={onClose}>
+        ×
+      </button>
       <canvas
         ref={canvasRef}
         width={MMW}

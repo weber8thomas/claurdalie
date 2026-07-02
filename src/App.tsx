@@ -16,6 +16,8 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const [menu, setMenu] = useState<MenuState | null>(null)
+  const [showLegend, setShowLegend] = useState(true)
+  const [showMinimap, setShowMinimap] = useState(true)
   const toastTimer = useRef(0)
 
   const showToast = useCallback((msg: string) => {
@@ -49,11 +51,21 @@ export default function App() {
       }}
       onDrop={onDrop}
     >
-      {ctrl && <Toolbar ctrl={ctrl} onToast={showToast} onToggleHelp={toggleHelp} />}
+      {ctrl && (
+        <Toolbar
+          ctrl={ctrl}
+          onToast={showToast}
+          onToggleHelp={toggleHelp}
+          showLegend={showLegend}
+          showMinimap={showMinimap}
+          onToggleLegend={() => setShowLegend((s) => !s)}
+          onToggleMinimap={() => setShowMinimap((s) => !s)}
+        />
+      )}
       <div className="main">
         <AlignmentCanvas onReady={setCtrl} onToggleHelp={toggleHelp} onContextMenu={openContextMenu} />
-        {ctrl && <SchemeLegend ctrl={ctrl} />}
-        {ctrl && <Minimap ctrl={ctrl} />}
+        {ctrl && showLegend && <SchemeLegend ctrl={ctrl} onClose={() => setShowLegend(false)} />}
+        {ctrl && showMinimap && <Minimap ctrl={ctrl} onClose={() => setShowMinimap(false)} />}
         {dragging && <div className="dropzone">Drop a FASTA file to load</div>}
       </div>
       {ctrl && <StatusBar ctrl={ctrl} />}

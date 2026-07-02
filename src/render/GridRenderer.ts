@@ -1,4 +1,5 @@
 import { GAP_CODE } from '../core/alphabet'
+import { residueOf } from '../core/AlignmentStore'
 import type { AlignmentStore } from '../core/AlignmentStore'
 import type { ColumnStatsCache } from '../core/stats/ColumnStats'
 import { toCss, type ColorScheme, type RGB } from '../color/scheme'
@@ -122,8 +123,8 @@ export class GridRenderer {
   }
 
   setZoom(cellW: number, cellH: number): void {
-    this.cellW = clamp(cellW, 1, 40)
-    this.cellH = clamp(cellH, 1, 44)
+    this.cellW = clamp(cellW, 0.25, 40)
+    this.cellH = clamp(cellH, 0.25, 44)
     this.clampScroll()
     this.dirty = true
   }
@@ -134,8 +135,8 @@ export class GridRenderer {
     const gy = py - RULER_H
     const colAt = (this.scrollX + gx) / this.cellW
     const rowAt = (this.scrollY + gy) / this.cellH
-    const newW = clamp(this.cellW * factor, 1, 40)
-    const newH = clamp(this.cellH * factor, 1, 44)
+    const newW = clamp(this.cellW * factor, 0.25, 40)
+    const newH = clamp(this.cellH * factor, 0.25, 44)
     this.cellW = newW
     this.cellH = newH
     this.scrollX = colAt * newW - gx
@@ -312,30 +313,38 @@ export class GridRenderer {
   private paintCells(vis: ReturnType<typeof computeVisible>): void {
     const ctx = this.ctx
     const showText = this.cellW >= TEXT_THRESHOLD && this.cellH >= TEXT_THRESHOLD
-    const dynamic = this.scheme.dynamic
+    // Only pay for per-column consensus stats when we're actually drawing
+    // glyphs. Zoomed out (block mode) we use static group colors — O(1)/cell.
+    const useStats = this.scheme.dynamic && showText
+    // Below 1px/cell, sample columns/rows so work tracks pixels, not cells.
+    const stepC = this.cellW >= 1 ? 1 : Math.max(1, Math.floor(1 / this.cellW))
+    const stepR = this.cellH >= 1 ? 1 : Math.max(1, Math.floor(1 / this.cellH))
 
     ctx.save()
     ctx.beginPath()
     ctx.rect(GUTTER_W, RULER_H, this.gridWidthPx, this.gridHeightPx)
     ctx.clip()
 
-    // Pass 1: backgrounds, batched into color runs per row.
-    for (let v = vis.firstRow; v < vis.lastRow; v++) {
+    // Pass 1: backgrounds, batched into color runs per row (sampled when tiny).
+    const SENTINEL = -1 as unknown as RGB
+    for (let v = vis.firstRow; v < vis.lastRow; v += stepR) {
       const y = this.cellY(v)
-      const h = this.cellY(v + 1) - y
+      const vEnd = Math.min(vis.lastRow, v + stepR)
+      const h = Math.max(1, this.cellY(vEnd) - y)
+      const row = this.store.getRow(this.store.rowIdAt(v)) // hoist: no per-cell Map.get
       let runStart = vis.firstCol
-      let runColor: RGB | null = -1 as unknown as RGB
-      for (let c = vis.firstCol; c <= vis.lastCol; c++) {
+      let runColor: RGB | null = SENTINEL
+      for (let c = vis.firstCol; c <= vis.lastCol; c += stepC) {
         let color: RGB | null = null
         if (c < vis.lastCol) {
-          const code = this.store.residueAt(v, c)
+          const code = residueOf(row, c)
           if (code !== GAP_CODE) {
-            const stats = dynamic ? this.stats.get(c) : null
+            const stats = useStats ? this.stats.get(c) : null
             color = this.scheme.bg({ code, col: c, stats })
           }
         }
         if (color !== runColor) {
-          if (runColor !== (-1 as unknown as RGB) && runColor !== null && c > runStart) {
+          if (runColor !== SENTINEL && runColor !== null && c > runStart) {
             const x = this.cellX(runStart)
             ctx.fillStyle = toCss(runColor)
             ctx.fillRect(x, y, this.cellX(c) - x, h)
@@ -354,10 +363,11 @@ export class GridRenderer {
       const gh = this.atlas.cellGlyphHeight
       for (let v = vis.firstRow; v < vis.lastRow; v++) {
         const y = this.cellY(v)
+        const row = this.store.getRow(this.store.rowIdAt(v))
         for (let c = vis.firstCol; c < vis.lastCol; c++) {
-          const code = this.store.residueAt(v, c)
+          const code = residueOf(row, c)
           if (code === GAP_CODE) continue
-          const stats = dynamic ? this.stats.get(c) : null
+          const stats = useStats ? this.stats.get(c) : null
           const fg = this.scheme.fg({ code, col: c, stats })
           const atlas = this.atlas.atlas(fg)
           const x = this.cellX(c)

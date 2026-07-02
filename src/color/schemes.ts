@@ -109,7 +109,8 @@ function clustalScheme(dark: boolean): ColorScheme {
       if (!color) return null
       const group = CLUSTAL_GROUP[ctx.code]
       const stats = ctx.stats
-      if (!stats || stats.total === 0) return null
+      // No stats (e.g. zoomed-out block mode): show the ungated group color.
+      if (!stats || stats.total === 0) return color
       // Fraction of the column belonging to this residue's group.
       let inGroup = 0
       for (let c = 1; c < stats.counts.length; c++) {

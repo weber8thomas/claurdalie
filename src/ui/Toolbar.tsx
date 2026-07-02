@@ -9,6 +9,10 @@ interface Props {
   ctrl: EditorController
   onToast: (msg: string) => void
   onToggleHelp: () => void
+  showLegend: boolean
+  showMinimap: boolean
+  onToggleLegend: () => void
+  onToggleMinimap: () => void
 }
 
 const SCHEMES = [
@@ -19,7 +23,15 @@ const SCHEMES = [
   { id: 'plain', label: 'Plain' },
 ]
 
-export function Toolbar({ ctrl, onToast, onToggleHelp }: Props) {
+export function Toolbar({
+  ctrl,
+  onToast,
+  onToggleHelp,
+  showLegend,
+  showMinimap,
+  onToggleLegend,
+  onToggleMinimap,
+}: Props) {
   const snap = useEditorSnapshot(ctrl)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -142,6 +154,23 @@ export function Toolbar({ ctrl, onToast, onToggleHelp }: Props) {
       </div>
 
       <div className="spacer" />
+
+      <div className="tb-group">
+        <button
+          className={'icon' + (showLegend ? ' active' : '')}
+          onClick={onToggleLegend}
+          title="Color legend"
+        >
+          🎨
+        </button>
+        <button
+          className={'icon' + (showMinimap ? ' active' : '')}
+          onClick={onToggleMinimap}
+          title="Minimap"
+        >
+          🗺
+        </button>
+      </div>
 
       <div className="tb-group" style={{ borderRight: 'none' }}>
         <button className="icon" onClick={() => ctrl.setDark(!snap.dark)} title="Toggle theme">

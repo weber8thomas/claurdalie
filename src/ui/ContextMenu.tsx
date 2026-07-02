@@ -86,6 +86,12 @@ export function ContextMenu({
     },
   )
 
+  // Opening the menu on a name highlights that whole track.
+  useEffect(() => {
+    if (hit.region === 'gutter') ctrl.selectRow(hit.row)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Close on outside click / Escape.
   useEffect(() => {
     const onDown = (e: MouseEvent) => {

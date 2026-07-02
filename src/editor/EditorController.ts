@@ -346,11 +346,33 @@ export class EditorController {
       )
     }
   }
-  /** Move a visual row up/down by `delta` positions (one undo entry). */
+  /** Move a visual row up/down by `delta` positions, keeping it highlighted and in view. */
   moveRowBy(v: number, delta: number): void {
     const to = clampInt(v + delta, 0, this.store.height - 1)
     if (to === v) return
     this.undo.do(new ReorderRowsCommand(v, to))
+    this.selectRow(to)
+  }
+
+  /** Highlight a whole visual row (track) and scroll it into view vertically. */
+  selectRow(v: number): void {
+    if (v < 0 || v >= this.store.height) return
+    const col = this.renderer.cursor?.col ?? 0
+    this.renderer.cursor = { row: v, col: clampInt(col, 0, Math.max(0, this.store.width - 1)) }
+    this.renderer.selection = { r0: v, c0: 0, r1: v, c1: Math.max(0, this.store.width - 1) }
+    this.selectionAnchor = null
+    this.ensureRowVisible(v)
+    this.renderer.markDirty()
+    this.bump()
+  }
+
+  private ensureRowVisible(v: number): void {
+    const r = this.renderer
+    const y = v * r.cellH
+    let ny = r.scrollY
+    if (y < r.scrollY) ny = y
+    else if (y + r.cellH > r.scrollY + r.gridHeightPx) ny = y + r.cellH - r.gridHeightPx
+    r.setScroll(r.scrollX, ny)
   }
 
   /** Shift explicit rows (used by shift-drag), coalesced under `key`. */
@@ -369,6 +391,7 @@ export class EditorController {
     // splice semantics: dropping below its own position shifts the target down by 1
     const adjusted = to > from ? to - 1 : to
     this.undo.do(new ReorderRowsCommand(from, adjusted))
+    this.selectRow(adjusted)
   }
 
   undoAction(): void {
