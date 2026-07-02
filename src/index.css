@@ -42,11 +42,9 @@ body {
   letter-spacing: -0.02em;
   padding-right: var(--sp-2);
 }
-.brand .dot {
-  width: 20px;
-  height: 20px;
+.brand-mark {
+  display: block;
   border-radius: 6px;
-  background: linear-gradient(135deg, #2f6df6, #7c3aed);
   box-shadow: var(--shadow-sm);
 }
 .tb-group {
