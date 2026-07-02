@@ -1,0 +1,316 @@
+@import './ui/theme/tokens.css';
+
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+body {
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ---- app shell ---------------------------------------------------------- */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  z-index: 10;
+  flex-wrap: wrap;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  padding-right: var(--sp-2);
+}
+.brand .dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #2f6df6, #7c3aed);
+  box-shadow: var(--shadow-sm);
+}
+.tb-group {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding-right: var(--sp-3);
+  border-right: 1px solid var(--border);
+}
+.tb-group:last-child {
+  border-right: none;
+}
+.spacer {
+  flex: 1;
+}
+
+/* ---- controls ----------------------------------------------------------- */
+button,
+select,
+.btn {
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background var(--dur), border-color var(--dur), transform var(--dur);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+button:hover,
+.btn:hover {
+  background: var(--hover);
+  border-color: var(--border-strong);
+}
+button:active,
+.btn:active {
+  transform: translateY(1px);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+button.primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: transparent;
+}
+button.primary:hover {
+  background: var(--accent);
+  filter: brightness(1.06);
+}
+button.icon {
+  padding: 6px 8px;
+  min-width: 32px;
+  justify-content: center;
+}
+button.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+select {
+  padding-right: 8px;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.zoom-label {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 12px;
+  min-width: 42px;
+  text-align: center;
+}
+
+/* ---- main / canvas ------------------------------------------------------ */
+.main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.canvas-wrap {
+  position: absolute;
+  inset: 0;
+}
+canvas.grid {
+  display: block;
+  cursor: cell;
+  touch-action: none;
+}
+
+/* ---- status bar --------------------------------------------------------- */
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: 4px var(--sp-3);
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  z-index: 10;
+}
+.statusbar .chip {
+  color: var(--text);
+}
+.statusbar .mode {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---- minimap ------------------------------------------------------------ */
+.minimap {
+  position: absolute;
+  right: var(--sp-3);
+  bottom: var(--sp-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  cursor: crosshair;
+}
+.minimap canvas {
+  display: block;
+}
+
+/* ---- legend ------------------------------------------------------------- */
+.legend {
+  position: absolute;
+  left: var(--sp-3);
+  bottom: var(--sp-3);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--sp-2) var(--sp-3);
+  max-width: 320px;
+  font-size: 11px;
+}
+.legend h4 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.legend .swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.legend .sw {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: #111;
+}
+
+/* ---- overlays / modal --------------------------------------------------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 12, 16, 0.5);
+  backdrop-filter: blur(3px);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+  animation: fade var(--dur) ease;
+}
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: min(640px, 92vw);
+  max-height: 82vh;
+  overflow: auto;
+  padding: var(--sp-5);
+}
+.modal h2 {
+  margin: 0 0 var(--sp-4);
+  font-size: 18px;
+}
+.modal .close {
+  position: absolute;
+}
+.kbd-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  align-items: center;
+}
+.kbd-group {
+  grid-column: 1 / -1;
+  margin-top: var(--sp-3);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--panel-2);
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+/* ---- dropzone ----------------------------------------------------------- */
+.dropzone {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  border: 3px dashed var(--accent);
+  z-index: 50;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--accent);
+  pointer-events: none;
+}
+
+/* ---- toast -------------------------------------------------------------- */
+.toast {
+  position: fixed;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--bg);
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  box-shadow: var(--shadow);
+  z-index: 200;
+  animation: fade var(--dur) ease;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 12px;
+}

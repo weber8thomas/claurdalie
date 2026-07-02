@@ -1,0 +1,475 @@
+import { GAP_CODE } from '../core/alphabet'
+import type { AlignmentStore } from '../core/AlignmentStore'
+import type { ColumnStatsCache } from '../core/stats/ColumnStats'
+import { toCss, type ColorScheme, type RGB } from '../color/scheme'
+import { GlyphAtlas } from './GlyphAtlas'
+import { LIGHT_CANVAS, type CanvasTheme } from './theme'
+import { clamp, computeVisible, maxScroll } from './viewport'
+
+export const GUTTER_W = 156
+export const RULER_H = 22
+const TEXT_THRESHOLD = 6 // px/cell below which we stop drawing letters (block mode)
+
+export interface CellPos {
+  row: number
+  col: number
+}
+export interface Selection {
+  r0: number
+  c0: number
+  r1: number
+  c1: number
+}
+export type HitRegion = 'grid' | 'gutter' | 'ruler' | 'corner'
+export interface Hit {
+  region: HitRegion
+  row: number
+  col: number
+}
+
+/**
+ * High-performance Canvas 2D renderer for the alignment grid.
+ *
+ * Anti-flicker discipline:
+ *  - one rAF loop, only paints when `dirty` (scroll/zoom/edit/selection).
+ *  - opaque full-viewport background every frame (no partial/transparent frames).
+ *  - scroll/zoom are imperative (setScroll/zoomAt) — never routed through React.
+ *  - pixel-snapped cell coordinates; glyphs blitted from a pre-baked atlas.
+ */
+export class GridRenderer {
+  private ctx: Canvas64
+  private dpr = 1
+  private cssW = 0
+  private cssH = 0
+  private atlas: GlyphAtlas
+  private raf = 0
+  private dirty = true
+
+  // view state (mutated imperatively)
+  scrollX = 0
+  scrollY = 0
+  cellW = 16
+  cellH = 18
+  scheme!: ColorScheme
+  theme: CanvasTheme = LIGHT_CANVAS
+  selection: Selection | null = null
+  cursor: CellPos | null = null
+  hover: CellPos | null = null
+  dropIndex: number | null = null
+
+  constructor(
+    private canvas: HTMLCanvasElement,
+    private store: AlignmentStore,
+    private stats: ColumnStatsCache,
+    fontFamily: string,
+  ) {
+    this.ctx = canvas.getContext('2d', { alpha: false }) as unknown as Canvas64
+    this.atlas = new GlyphAtlas(fontFamily)
+    const loop = () => {
+      if (this.dirty) {
+        this.dirty = false
+        this.paint()
+      }
+      this.raf = requestAnimationFrame(loop)
+    }
+    this.raf = requestAnimationFrame(loop)
+  }
+
+  destroy(): void {
+    cancelAnimationFrame(this.raf)
+  }
+
+  markDirty(): void {
+    this.dirty = true
+  }
+
+  // Lightweight per-frame view notification (scroll/zoom) for the minimap etc.
+  private viewListeners = new Set<() => void>()
+  addViewListener(fn: () => void): () => void {
+    this.viewListeners.add(fn)
+    return () => this.viewListeners.delete(fn)
+  }
+
+  // ---- geometry -----------------------------------------------------------
+
+  get gridWidthPx(): number {
+    return Math.max(0, this.cssW - GUTTER_W)
+  }
+  get gridHeightPx(): number {
+    return Math.max(0, this.cssH - RULER_H)
+  }
+
+  setSize(cssW: number, cssH: number, dpr: number): void {
+    this.cssW = cssW
+    this.cssH = cssH
+    this.dpr = dpr
+    this.canvas.width = Math.round(cssW * dpr)
+    this.canvas.height = Math.round(cssH * dpr)
+    this.canvas.style.width = cssW + 'px'
+    this.canvas.style.height = cssH + 'px'
+    this.clampScroll()
+    this.dirty = true
+  }
+
+  setZoom(cellW: number, cellH: number): void {
+    this.cellW = clamp(cellW, 1, 40)
+    this.cellH = clamp(cellH, 1, 44)
+    this.clampScroll()
+    this.dirty = true
+  }
+
+  /** Zoom keeping the cell under (px,py) anchored. */
+  zoomAt(factor: number, px: number, py: number): void {
+    const gx = px - GUTTER_W
+    const gy = py - RULER_H
+    const colAt = (this.scrollX + gx) / this.cellW
+    const rowAt = (this.scrollY + gy) / this.cellH
+    const newW = clamp(this.cellW * factor, 1, 40)
+    const newH = clamp(this.cellH * factor, 1, 44)
+    this.cellW = newW
+    this.cellH = newH
+    this.scrollX = colAt * newW - gx
+    this.scrollY = rowAt * newH - gy
+    this.clampScroll()
+    this.dirty = true
+  }
+
+  scrollBy(dx: number, dy: number): void {
+    this.scrollX += dx
+    this.scrollY += dy
+    this.clampScroll()
+    this.dirty = true
+  }
+
+  setScroll(x: number, y: number): void {
+    this.scrollX = x
+    this.scrollY = y
+    this.clampScroll()
+    this.dirty = true
+  }
+
+  private clampScroll(): void {
+    const m = maxScroll({
+      cols: this.store.width,
+      rows: this.store.height,
+      cellW: this.cellW,
+      cellH: this.cellH,
+      gridWidthPx: this.gridWidthPx,
+      gridHeightPx: this.gridHeightPx,
+    })
+    this.scrollX = clamp(this.scrollX, 0, m.x)
+    this.scrollY = clamp(this.scrollY, 0, m.y)
+  }
+
+  maxScroll(): { x: number; y: number } {
+    return maxScroll({
+      cols: this.store.width,
+      rows: this.store.height,
+      cellW: this.cellW,
+      cellH: this.cellH,
+      gridWidthPx: this.gridWidthPx,
+      gridHeightPx: this.gridHeightPx,
+    })
+  }
+
+  // ---- hit testing --------------------------------------------------------
+
+  hitTest(px: number, py: number): Hit {
+    const inGutter = px < GUTTER_W
+    const inRuler = py < RULER_H
+    const col = Math.floor((this.scrollX + (px - GUTTER_W)) / this.cellW)
+    const row = Math.floor((this.scrollY + (py - RULER_H)) / this.cellH)
+    let region: HitRegion
+    if (inGutter && inRuler) region = 'corner'
+    else if (inGutter) region = 'gutter'
+    else if (inRuler) region = 'ruler'
+    else region = 'grid'
+    return { region, row, col }
+  }
+
+  /** Visual row index nearest a y pixel, for drag-reorder drop position. */
+  dropIndexAt(py: number): number {
+    const y = this.scrollY + (py - RULER_H)
+    return clamp(Math.round(y / this.cellH), 0, this.store.height)
+  }
+
+  // ---- painting -----------------------------------------------------------
+
+  private paint(): void {
+    const ctx = this.ctx
+    const S = this.dpr
+    const t = this.theme
+    ctx.setTransform(S, 0, 0, S, 0, 0)
+
+    this.atlas.configure(this.cellW, this.cellH, S)
+
+    // Background.
+    ctx.fillStyle = toCss(t.gridBg)
+    ctx.fillRect(0, 0, this.cssW, this.cssH)
+
+    const vis = computeVisible({
+      scrollX: this.scrollX,
+      scrollY: this.scrollY,
+      cellW: this.cellW,
+      cellH: this.cellH,
+      gridWidthPx: this.gridWidthPx,
+      gridHeightPx: this.gridHeightPx,
+      rows: this.store.height,
+      cols: this.store.width,
+    })
+
+    this.paintCells(vis)
+    this.paintSelectionAndCursor()
+    this.paintGutter(vis)
+    this.paintRuler(vis)
+    this.paintCorner()
+
+    for (const fn of this.viewListeners) fn()
+  }
+
+  private cellX(col: number): number {
+    return Math.round(GUTTER_W + col * this.cellW - this.scrollX)
+  }
+  private cellY(row: number): number {
+    return Math.round(RULER_H + row * this.cellH - this.scrollY)
+  }
+
+  private paintCells(vis: ReturnType<typeof computeVisible>): void {
+    const ctx = this.ctx
+    const showText = this.cellW >= TEXT_THRESHOLD && this.cellH >= TEXT_THRESHOLD
+    const dynamic = this.scheme.dynamic
+
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(GUTTER_W, RULER_H, this.gridWidthPx, this.gridHeightPx)
+    ctx.clip()
+
+    // Pass 1: backgrounds, batched into color runs per row.
+    for (let v = vis.firstRow; v < vis.lastRow; v++) {
+      const y = this.cellY(v)
+      const h = this.cellY(v + 1) - y
+      let runStart = vis.firstCol
+      let runColor: RGB | null = -1 as unknown as RGB
+      for (let c = vis.firstCol; c <= vis.lastCol; c++) {
+        let color: RGB | null = null
+        if (c < vis.lastCol) {
+          const code = this.store.residueAt(v, c)
+          if (code !== GAP_CODE) {
+            const stats = dynamic ? this.stats.get(c) : null
+            color = this.scheme.bg({ code, col: c, stats })
+          }
+        }
+        if (color !== runColor) {
+          if (runColor !== (-1 as unknown as RGB) && runColor !== null && c > runStart) {
+            const x = this.cellX(runStart)
+            ctx.fillStyle = toCss(runColor)
+            ctx.fillRect(x, y, this.cellX(c) - x, h)
+          }
+          runStart = c
+          runColor = color
+        }
+      }
+    }
+
+    // Pass 2: glyphs (skipped in block mode / zoomed out).
+    if (showText) {
+      const dw = this.cellW
+      const dh = this.cellH
+      const gw = this.atlas.cellGlyphWidth
+      const gh = this.atlas.cellGlyphHeight
+      for (let v = vis.firstRow; v < vis.lastRow; v++) {
+        const y = this.cellY(v)
+        for (let c = vis.firstCol; c < vis.lastCol; c++) {
+          const code = this.store.residueAt(v, c)
+          if (code === GAP_CODE) continue
+          const stats = dynamic ? this.stats.get(c) : null
+          const fg = this.scheme.fg({ code, col: c, stats })
+          const atlas = this.atlas.atlas(fg)
+          const x = this.cellX(c)
+          ctx.drawImage(atlas as unknown as CanvasImageSource, this.atlas.glyphX(code), 0, gw, gh, x, y, dw, dh)
+        }
+      }
+    }
+
+    // Faint grid lines when cells are large enough to warrant them.
+    if (this.cellW >= 10) {
+      const bottom = Math.min(this.cssH, this.cellY(this.store.height))
+      ctx.strokeStyle = toCss(this.theme.gridLine)
+      ctx.lineWidth = 1
+      ctx.globalAlpha = 0.6
+      ctx.beginPath()
+      for (let c = vis.firstCol; c <= vis.lastCol; c++) {
+        const x = this.cellX(c) + 0.5
+        ctx.moveTo(x, RULER_H)
+        ctx.lineTo(x, bottom)
+      }
+      ctx.stroke()
+      ctx.globalAlpha = 1
+    }
+
+    ctx.restore()
+  }
+
+  private paintSelectionAndCursor(): void {
+    const ctx = this.ctx
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(GUTTER_W, RULER_H, this.gridWidthPx, this.gridHeightPx)
+    ctx.clip()
+
+    // Hover crosshair.
+    if (this.hover) {
+      ctx.fillStyle = toCss(this.theme.hover)
+      ctx.globalAlpha = 0.12
+      const hx = this.cellX(this.hover.col)
+      ctx.fillRect(hx, RULER_H, this.cellW, this.gridHeightPx)
+      const hy = this.cellY(this.hover.row)
+      ctx.fillRect(GUTTER_W, hy, this.gridWidthPx, this.cellH)
+      ctx.globalAlpha = 1
+    }
+
+    // Selection rectangle.
+    if (this.selection) {
+      const s = this.normSelection(this.selection)
+      const x = this.cellX(s.c0)
+      const y = this.cellY(s.r0)
+      const w = this.cellX(s.c1 + 1) - x
+      const h = this.cellY(s.r1 + 1) - y
+      ctx.fillStyle = toCss(this.theme.selection)
+      ctx.globalAlpha = 0.16
+      ctx.fillRect(x, y, w, h)
+      ctx.globalAlpha = 1
+      ctx.strokeStyle = toCss(this.theme.selection)
+      ctx.lineWidth = 1.5
+      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1)
+    }
+
+    // Cursor cell.
+    if (this.cursor) {
+      const x = this.cellX(this.cursor.col)
+      const y = this.cellY(this.cursor.row)
+      ctx.strokeStyle = toCss(this.theme.cursor)
+      ctx.lineWidth = 2
+      ctx.strokeRect(x + 1, y + 1, this.cellW - 2, this.cellH - 2)
+    }
+    ctx.restore()
+  }
+
+  private normSelection(s: Selection): Selection {
+    return {
+      r0: Math.min(s.r0, s.r1),
+      r1: Math.max(s.r0, s.r1),
+      c0: Math.min(s.c0, s.c1),
+      c1: Math.max(s.c0, s.c1),
+    }
+  }
+
+  private paintGutter(vis: ReturnType<typeof computeVisible>): void {
+    const ctx = this.ctx
+    const t = this.theme
+    ctx.fillStyle = toCss(t.gutterBg)
+    ctx.fillRect(0, RULER_H, GUTTER_W, this.cssH - RULER_H)
+
+    const sel = this.selection ? this.normSelection(this.selection) : null
+    ctx.textBaseline = 'middle'
+    ctx.font = `12px system-ui, sans-serif`
+    for (let v = vis.firstRow; v < vis.lastRow; v++) {
+      const y = this.cellY(v)
+      if (sel && v >= sel.r0 && v <= sel.r1) {
+        ctx.fillStyle = toCss(t.selection)
+        ctx.globalAlpha = 0.14
+        ctx.fillRect(0, y, GUTTER_W, this.cellH)
+        ctx.globalAlpha = 1
+      }
+      ctx.fillStyle = toCss(t.text)
+      const name = this.store.rowName(v)
+      ctx.fillText(this.ellipsize(name, GUTTER_W - 16), 10, y + this.cellH / 2, GUTTER_W - 16)
+    }
+
+    // Drag-reorder drop indicator.
+    if (this.dropIndex !== null) {
+      const y = this.cellY(this.dropIndex)
+      ctx.strokeStyle = toCss(t.dropLine)
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(0, y)
+      ctx.lineTo(this.cssW, y)
+      ctx.stroke()
+    }
+
+    // Gutter right border.
+    ctx.strokeStyle = toCss(t.gridLine)
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(GUTTER_W + 0.5, RULER_H)
+    ctx.lineTo(GUTTER_W + 0.5, this.cssH)
+    ctx.stroke()
+  }
+
+  private ellipsize(s: string, maxPx: number): string {
+    if (this.ctx.measureText(s).width <= maxPx) return s
+    let lo = 0,
+      hi = s.length
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1
+      if (this.ctx.measureText(s.slice(0, mid) + '…').width <= maxPx) lo = mid
+      else hi = mid - 1
+    }
+    return s.slice(0, lo) + '…'
+  }
+
+  private paintRuler(vis: ReturnType<typeof computeVisible>): void {
+    const ctx = this.ctx
+    const t = this.theme
+    ctx.fillStyle = toCss(t.rulerBg)
+    ctx.fillRect(GUTTER_W, 0, this.cssW - GUTTER_W, RULER_H)
+
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(GUTTER_W, 0, this.cssW - GUTTER_W, RULER_H)
+    ctx.clip()
+    ctx.fillStyle = toCss(t.mutedText)
+    ctx.strokeStyle = toCss(t.gridLine)
+    ctx.font = `10px system-ui, sans-serif`
+    ctx.textBaseline = 'middle'
+    ctx.textAlign = 'center'
+    const step = tickStep(this.cellW)
+    const start = Math.max(1, Math.floor(vis.firstCol / step) * step)
+    ctx.beginPath()
+    for (let c = start; c < vis.lastCol; c += step) {
+      const x = this.cellX(c - 1) + this.cellW / 2
+      ctx.fillText(String(c), x, RULER_H / 2)
+      ctx.moveTo(Math.round(x) + 0.5, RULER_H - 4)
+      ctx.lineTo(Math.round(x) + 0.5, RULER_H)
+    }
+    ctx.stroke()
+    ctx.textAlign = 'left'
+    // Bottom border.
+    ctx.strokeStyle = toCss(t.gridLine)
+    ctx.beginPath()
+    ctx.moveTo(GUTTER_W, RULER_H + 0.5)
+    ctx.lineTo(this.cssW, RULER_H + 0.5)
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  private paintCorner(): void {
+    const ctx = this.ctx
+    ctx.fillStyle = toCss(this.theme.rulerBg)
+    ctx.fillRect(0, 0, GUTTER_W, RULER_H)
+    ctx.strokeStyle = toCss(this.theme.gridLine)
+    ctx.lineWidth = 1
+    ctx.strokeRect(0.5, 0.5, GUTTER_W, RULER_H)
+  }
+}
+
+function tickStep(cellW: number): number {
+  const targetPx = 55
+  const raw = targetPx / cellW
+  const steps = [1, 2, 5, 10, 20, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+  for (const s of steps) if (s >= raw) return s
+  return 10000
+}
+
+// The 2D context type with the few methods we use; keeps TS happy across libs.
+type Canvas64 = CanvasRenderingContext2D
