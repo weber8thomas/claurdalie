@@ -1,5 +1,5 @@
 import type { EditorController } from './EditorController'
-import type { Selection } from '../render/GridRenderer'
+import type { Selection, ScrollbarHit } from '../render/GridRenderer'
 
 interface Handlers {
   toggleHelp: () => void
@@ -21,6 +21,7 @@ export function attachInteraction(
     | { kind: 'select'; anchor: { row: number; col: number } }
     | { kind: 'shift'; ids: number[]; startCol: number; applied: number; key: string }
     | { kind: 'reorder'; from: number }
+    | { kind: 'scroll'; bar: ScrollbarHit; grab: number }
   let drag: Drag = { kind: 'none' }
 
   const localXY = (e: PointerEvent | WheelEvent) => {
@@ -31,6 +32,22 @@ export function attachInteraction(
   const onPointerDown = (e: PointerEvent) => {
     canvas.setPointerCapture(e.pointerId)
     const { x, y } = localXY(e)
+
+    // Scrollbars take priority (they overlay the grid edges).
+    const bar = r.hitScrollbar(x, y)
+    if (bar) {
+      const pos = bar.axis === 'h' ? x : y
+      const onThumb = pos >= bar.thumbStart && pos <= bar.thumbStart + bar.thumbLen
+      if (onThumb) {
+        drag = { kind: 'scroll', bar, grab: pos - bar.thumbStart }
+      } else {
+        // Click on the track: jump the thumb centre to the cursor, then drag.
+        r.scrollToThumb(bar, pos - bar.thumbLen / 2)
+        drag = { kind: 'scroll', bar: r.hitScrollbar(x, y) ?? bar, grab: bar.thumbLen / 2 }
+      }
+      return
+    }
+
     const hit = r.hitTest(x, y)
 
     if (hit.region === 'gutter') {
@@ -66,8 +83,18 @@ export function attachInteraction(
     const { x, y } = localXY(e)
     const hit = r.hitTest(x, y)
 
+    if (drag.kind === 'scroll') {
+      const pos = drag.bar.axis === 'h' ? x : y
+      r.scrollToThumb(drag.bar, pos - drag.grab)
+      return
+    }
+
     if (drag.kind === 'none') {
-      // hover crosshair
+      // hover crosshair (suppressed over the scrollbars)
+      if (r.hitScrollbar(x, y)) {
+        ctrl.setHover(null)
+        return
+      }
       if (hit.region === 'grid' && hit.row < ctrl.store.height && hit.col < ctrl.store.width && hit.row >= 0 && hit.col >= 0) {
         ctrl.setHover({ row: hit.row, col: hit.col })
       } else {
@@ -122,7 +149,12 @@ export function attachInteraction(
       return
     }
     const unit = e.deltaMode === 1 ? r.cellH : 1
-    r.scrollBy(e.deltaX * unit, e.deltaY * unit)
+    // Shift+wheel scrolls horizontally (standard for vertical-only mice).
+    if (e.shiftKey && e.deltaX === 0) {
+      r.scrollBy(e.deltaY * unit, 0)
+    } else {
+      r.scrollBy(e.deltaX * unit, e.deltaY * unit)
+    }
   }
 
   let scrollTimer = 0

@@ -8,7 +8,17 @@ import { clamp, computeVisible, maxScroll } from './viewport'
 
 export const GUTTER_W = 156
 export const RULER_H = 22
+export const SB = 11 // scrollbar thickness
 const TEXT_THRESHOLD = 6 // px/cell below which we stop drawing letters (block mode)
+
+export interface ScrollbarHit {
+  axis: 'h' | 'v'
+  trackStart: number
+  trackLen: number
+  thumbStart: number
+  thumbLen: number
+  maxScroll: number
+}
 
 export interface CellPos {
   row: number
@@ -223,8 +233,73 @@ export class GridRenderer {
     this.paintGutter(vis)
     this.paintRuler(vis)
     this.paintCorner()
+    this.paintScrollbars()
 
     for (const fn of this.viewListeners) fn()
+  }
+
+  // ---- scrollbars ---------------------------------------------------------
+
+  private hGeom(): ScrollbarHit | null {
+    const contentW = this.store.width * this.cellW
+    const view = this.gridWidthPx
+    if (contentW <= view) return null
+    const trackStart = GUTTER_W
+    const trackLen = view
+    const thumbLen = Math.max(28, (view / contentW) * trackLen)
+    const maxScroll = contentW - view
+    const thumbStart = trackStart + (this.scrollX / maxScroll) * (trackLen - thumbLen)
+    return { axis: 'h', trackStart, trackLen, thumbStart, thumbLen, maxScroll }
+  }
+  private vGeom(): ScrollbarHit | null {
+    const contentH = this.store.height * this.cellH
+    const view = this.gridHeightPx
+    if (contentH <= view) return null
+    const trackStart = RULER_H
+    const trackLen = view
+    const thumbLen = Math.max(28, (view / contentH) * trackLen)
+    const maxScroll = contentH - view
+    const thumbStart = trackStart + (this.scrollY / maxScroll) * (trackLen - thumbLen)
+    return { axis: 'v', trackStart, trackLen, thumbStart, thumbLen, maxScroll }
+  }
+
+  private paintScrollbars(): void {
+    const ctx = this.ctx
+    const t = this.theme
+    const h = this.hGeom()
+    const v = this.vGeom()
+    const thumbCol = t.dark ? 'rgba(255,255,255,0.22)' : 'rgba(30,35,45,0.28)'
+    if (h) {
+      const y = this.cssH - SB
+      ctx.fillStyle = toCss(t.gutterBg)
+      ctx.fillRect(GUTTER_W, y, this.gridWidthPx, SB)
+      ctx.fillStyle = thumbCol
+      roundRect(ctx, h.thumbStart + 1, y + 2, h.thumbLen - 2, SB - 4, (SB - 4) / 2)
+    }
+    if (v) {
+      const x = this.cssW - SB
+      ctx.fillStyle = toCss(t.gutterBg)
+      ctx.fillRect(x, RULER_H, SB, this.gridHeightPx)
+      ctx.fillStyle = thumbCol
+      roundRect(ctx, x + 2, v.thumbStart + 1, SB - 4, v.thumbLen - 2, (SB - 4) / 2)
+    }
+  }
+
+  /** Hit-test a pixel against the scrollbars; returns geometry or null. */
+  hitScrollbar(px: number, py: number): ScrollbarHit | null {
+    const h = this.hGeom()
+    if (h && py >= this.cssH - SB && px >= GUTTER_W) return h
+    const v = this.vGeom()
+    if (v && px >= this.cssW - SB && py >= RULER_H) return v
+    return null
+  }
+
+  /** Set scroll so the thumb's start sits at `pos` pixels along its track. */
+  scrollToThumb(bar: ScrollbarHit, pos: number): void {
+    const frac = (pos - bar.trackStart) / (bar.trackLen - bar.thumbLen)
+    const s = clamp(frac, 0, 1) * bar.maxScroll
+    if (bar.axis === 'h') this.setScroll(s, this.scrollY)
+    else this.setScroll(this.scrollX, s)
   }
 
   private cellX(col: number): number {
@@ -461,6 +536,17 @@ export class GridRenderer {
     ctx.lineWidth = 1
     ctx.strokeRect(0.5, 0.5, GUTTER_W, RULER_H)
   }
+}
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+  const rr = Math.min(r, w / 2, h / 2)
+  ctx.beginPath()
+  ctx.moveTo(x + rr, y)
+  ctx.arcTo(x + w, y, x + w, y + h, rr)
+  ctx.arcTo(x + w, y + h, x, y + h, rr)
+  ctx.arcTo(x, y + h, x, y, rr)
+  ctx.arcTo(x, y, x + w, y, rr)
+  ctx.fill()
 }
 
 function tickStep(cellW: number): number {
