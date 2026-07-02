@@ -10,9 +10,11 @@ permissions:
   pages: write
   id-token: write
 
+# Allow one concurrent deployment; do NOT cancel an in-progress deploy so
+# production Pages deployments always finish (GitHub-recommended setting).
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
