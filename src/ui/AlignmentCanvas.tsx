@@ -4,14 +4,16 @@ import { attachInteraction } from '../editor/interaction'
 import { parseFasta } from '../core/io/fasta'
 import { LIGHT_FASTA } from '../datasets/light'
 import type { Hit } from '../render/GridRenderer'
+import type { HoverPayload } from '../editor/interaction'
 
 interface Props {
   onReady: (ctrl: EditorController) => void
   onToggleHelp: () => void
   onContextMenu: (x: number, y: number, hit: Hit) => void
+  onHover: (info: HoverPayload | null) => void
 }
 
-export function AlignmentCanvas({ onReady, onToggleHelp, onContextMenu }: Props) {
+export function AlignmentCanvas({ onReady, onToggleHelp, onContextMenu, onHover }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -32,6 +34,7 @@ export function AlignmentCanvas({ onReady, onToggleHelp, onContextMenu }: Props)
     const detach = attachInteraction(canvas, ctrl, {
       toggleHelp: onToggleHelp,
       openContextMenu: onContextMenu,
+      onHover,
     })
     onReady(ctrl)
 

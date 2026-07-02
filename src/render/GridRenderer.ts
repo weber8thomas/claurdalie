@@ -1,4 +1,4 @@
-import { GAP_CODE } from '../core/alphabet'
+import { ALPHABET_SIZE, GAP_CODE } from '../core/alphabet'
 import { residueOf } from '../core/AlignmentStore'
 import type { AlignmentStore } from '../core/AlignmentStore'
 import type { ColumnStatsCache } from '../core/stats/ColumnStats'
@@ -55,6 +55,10 @@ export class GridRenderer {
   private atlas: GlyphAtlas
   private raf = 0
   private dirty = true
+  // Offscreen buffer for the ImageData block-mode fast path.
+  private blockCanvas?: HTMLCanvasElement
+  private blockCtx?: CanvasRenderingContext2D
+  private blockImage?: ImageData
 
   // view state (mutated imperatively)
   scrollX = 0
@@ -66,6 +70,7 @@ export class GridRenderer {
   selection: Selection | null = null
   cursor: CellPos | null = null
   hover: CellPos | null = null
+  gutterHoverRow: number | null = null
   dropIndex: number | null = null
 
   constructor(
@@ -316,25 +321,45 @@ export class GridRenderer {
     // Only pay for per-column consensus stats when we're actually drawing
     // glyphs. Zoomed out (block mode) we use static group colors — O(1)/cell.
     const useStats = this.scheme.dynamic && showText
-    // Below 1px/cell, sample columns/rows so work tracks pixels, not cells.
-    const stepC = this.cellW >= 1 ? 1 : Math.max(1, Math.floor(1 / this.cellW))
-    const stepR = this.cellH >= 1 ? 1 : Math.max(1, Math.floor(1 / this.cellH))
 
     ctx.save()
     ctx.beginPath()
     ctx.rect(GUTTER_W, RULER_H, this.gridWidthPx, this.gridHeightPx)
     ctx.clip()
 
-    // Pass 1: backgrounds, batched into color runs per row (sampled when tiny).
+    if (showText) this.paintDetailed(vis, useStats)
+    else this.paintBlockImage(vis)
+
+    // Faint grid lines when cells are large enough to warrant them.
+    if (this.cellW >= 10) {
+      const bottom = Math.min(this.cssH, this.cellY(this.store.height))
+      ctx.strokeStyle = toCss(this.theme.gridLine)
+      ctx.lineWidth = 1
+      ctx.globalAlpha = 0.6
+      ctx.beginPath()
+      for (let c = vis.firstCol; c <= vis.lastCol; c++) {
+        const x = this.cellX(c) + 0.5
+        ctx.moveTo(x, RULER_H)
+        ctx.lineTo(x, bottom)
+      }
+      ctx.stroke()
+      ctx.globalAlpha = 1
+    }
+
+    ctx.restore()
+  }
+
+  /** Detailed rendering: batched color runs + glyphs (used when zoomed in). */
+  private paintDetailed(vis: ReturnType<typeof computeVisible>, useStats: boolean): void {
+    const ctx = this.ctx
     const SENTINEL = -1 as unknown as RGB
-    for (let v = vis.firstRow; v < vis.lastRow; v += stepR) {
+    for (let v = vis.firstRow; v < vis.lastRow; v++) {
       const y = this.cellY(v)
-      const vEnd = Math.min(vis.lastRow, v + stepR)
-      const h = Math.max(1, this.cellY(vEnd) - y)
-      const row = this.store.getRow(this.store.rowIdAt(v)) // hoist: no per-cell Map.get
+      const h = this.cellY(v + 1) - y
+      const row = this.store.getRow(this.store.rowIdAt(v))
       let runStart = vis.firstCol
       let runColor: RGB | null = SENTINEL
-      for (let c = vis.firstCol; c <= vis.lastCol; c += stepC) {
+      for (let c = vis.firstCol; c <= vis.lastCol; c++) {
         let color: RGB | null = null
         if (c < vis.lastCol) {
           const code = residueOf(row, c)
@@ -354,45 +379,91 @@ export class GridRenderer {
         }
       }
     }
-
-    // Pass 2: glyphs (skipped in block mode / zoomed out).
-    if (showText) {
-      const dw = this.cellW
-      const dh = this.cellH
-      const gw = this.atlas.cellGlyphWidth
-      const gh = this.atlas.cellGlyphHeight
-      for (let v = vis.firstRow; v < vis.lastRow; v++) {
-        const y = this.cellY(v)
-        const row = this.store.getRow(this.store.rowIdAt(v))
-        for (let c = vis.firstCol; c < vis.lastCol; c++) {
-          const code = residueOf(row, c)
-          if (code === GAP_CODE) continue
-          const stats = useStats ? this.stats.get(c) : null
-          const fg = this.scheme.fg({ code, col: c, stats })
-          const atlas = this.atlas.atlas(fg)
-          const x = this.cellX(c)
-          ctx.drawImage(atlas as unknown as CanvasImageSource, this.atlas.glyphX(code), 0, gw, gh, x, y, dw, dh)
-        }
+    const dw = this.cellW
+    const dh = this.cellH
+    const gw = this.atlas.cellGlyphWidth
+    const gh = this.atlas.cellGlyphHeight
+    for (let v = vis.firstRow; v < vis.lastRow; v++) {
+      const y = this.cellY(v)
+      const row = this.store.getRow(this.store.rowIdAt(v))
+      for (let c = vis.firstCol; c < vis.lastCol; c++) {
+        const code = residueOf(row, c)
+        if (code === GAP_CODE) continue
+        const stats = useStats ? this.stats.get(c) : null
+        const fg = this.scheme.fg({ code, col: c, stats })
+        const atlas = this.atlas.atlas(fg)
+        ctx.drawImage(atlas as unknown as CanvasImageSource, this.atlas.glyphX(code), 0, gw, gh, this.cellX(c), y, dw, dh)
       }
     }
+  }
 
-    // Faint grid lines when cells are large enough to warrant them.
-    if (this.cellW >= 10) {
-      const bottom = Math.min(this.cssH, this.cellY(this.store.height))
-      ctx.strokeStyle = toCss(this.theme.gridLine)
-      ctx.lineWidth = 1
-      ctx.globalAlpha = 0.6
-      ctx.beginPath()
-      for (let c = vis.firstCol; c <= vis.lastCol; c++) {
-        const x = this.cellX(c) + 0.5
-        ctx.moveTo(x, RULER_H)
-        ctx.lineTo(x, bottom)
-      }
-      ctx.stroke()
-      ctx.globalAlpha = 1
+  /**
+   * Block-mode fast path: rasterize the visible grid into an ImageData buffer
+   * (one write per screen pixel, not per cell) and blit it in a single call.
+   * This is what keeps extreme zoom-out on huge alignments smooth.
+   */
+  private paintBlockImage(vis: ReturnType<typeof computeVisible>): void {
+    void vis
+    const W = Math.max(1, Math.ceil(this.gridWidthPx))
+    const H = Math.max(1, Math.ceil(this.gridHeightPx))
+    if (!this.blockCanvas) {
+      this.blockCanvas = document.createElement('canvas')
+      this.blockCtx = this.blockCanvas.getContext('2d')!
+    }
+    const bc = this.blockCanvas
+    const bctx = this.blockCtx!
+    if (bc.width !== W || bc.height !== H) {
+      bc.width = W
+      bc.height = H
+      this.blockImage = undefined
+    }
+    if (!this.blockImage) this.blockImage = bctx.createImageData(W, H)
+    const img = this.blockImage
+    const buf = new Uint32Array(img.data.buffer)
+
+    // Per-code color table (packed) for the current scheme; gaps = grid bg.
+    const gridU32 = packABGR(this.theme.gridBg)
+    const table = new Uint32Array(ALPHABET_SIZE)
+    table[GAP_CODE] = gridU32
+    for (let code = 1; code < ALPHABET_SIZE; code++) {
+      const c = this.scheme.bg({ code, col: 0, stats: null })
+      table[code] = c == null ? gridU32 : packABGR(c)
     }
 
-    ctx.restore()
+    const cw = this.cellW
+    const ch = this.cellH
+    const rows = this.store.height
+    const cols = this.store.width
+    // Map each pixel to a column once (incremental — no per-pixel divide).
+    const colAt = new Int32Array(W)
+    let cf = this.scrollX / cw
+    const cstep = 1 / cw
+    for (let px = 0; px < W; px++) {
+      const c = cf | 0
+      colAt[px] = c < cols ? c : -1
+      cf += cstep
+    }
+    let rf = this.scrollY / ch
+    const rstep = 1 / ch
+    for (let py = 0; py < H; py++) {
+      const r = rf | 0
+      rf += rstep
+      const base = py * W
+      if (r >= rows) {
+        buf.fill(gridU32, base, base + W)
+        continue
+      }
+      const row = this.store.getRow(this.store.rowIdAt(r))
+      for (let px = 0; px < W; px++) {
+        const c = colAt[px]
+        buf[base + px] = c < 0 ? gridU32 : table[residueOf(row, c)]
+      }
+    }
+    bctx.putImageData(img, 0, 0)
+    const ctx = this.ctx
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(bc as unknown as CanvasImageSource, GUTTER_W, RULER_H, W, H)
+    ctx.imageSmoothingEnabled = true
   }
 
   private paintSelectionAndCursor(): void {
@@ -458,6 +529,7 @@ export class GridRenderer {
     const sel = this.selection ? this.normSelection(this.selection) : null
     ctx.textBaseline = 'middle'
     ctx.font = `12px system-ui, sans-serif`
+    const nameX = 26
     for (let v = vis.firstRow; v < vis.lastRow; v++) {
       const y = this.cellY(v)
       if (sel && v >= sel.r0 && v <= sel.r1) {
@@ -466,9 +538,18 @@ export class GridRenderer {
         ctx.fillRect(0, y, GUTTER_W, this.cellH)
         ctx.globalAlpha = 1
       }
+      const hovered = v === this.gutterHoverRow
+      if (hovered) {
+        ctx.fillStyle = toCss(t.hover)
+        ctx.globalAlpha = 0.16
+        ctx.fillRect(0, y, GUTTER_W, this.cellH)
+        ctx.globalAlpha = 1
+      }
+      // Drag handle (grip dots) — brighter on hover to signal draggability.
+      this.drawGrip(9, y + this.cellH / 2, hovered ? t.text : t.mutedText, hovered ? 0.9 : 0.4)
       ctx.fillStyle = toCss(t.text)
       const name = this.store.rowName(v)
-      ctx.fillText(this.ellipsize(name, GUTTER_W - 16), 10, y + this.cellH / 2, GUTTER_W - 16)
+      ctx.fillText(this.ellipsize(name, GUTTER_W - nameX - 6), nameX, y + this.cellH / 2, GUTTER_W - nameX - 6)
     }
 
     // Drag-reorder drop indicator.
@@ -489,6 +570,22 @@ export class GridRenderer {
     ctx.moveTo(GUTTER_W + 0.5, RULER_H)
     ctx.lineTo(GUTTER_W + 0.5, this.cssH)
     ctx.stroke()
+  }
+
+  private drawGrip(cx: number, cy: number, color: RGB, alpha: number): void {
+    if (this.cellH < 12) return
+    const ctx = this.ctx
+    ctx.fillStyle = toCss(color)
+    ctx.globalAlpha = alpha
+    const r = 1.15
+    for (let i = -1; i <= 1; i++) {
+      for (const dx of [-2.5, 2.5]) {
+        ctx.beginPath()
+        ctx.arc(cx + dx, cy + i * 4.5, r, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    }
+    ctx.globalAlpha = 1
   }
 
   private ellipsize(s: string, maxPx: number): string {
@@ -546,6 +643,14 @@ export class GridRenderer {
     ctx.lineWidth = 1
     ctx.strokeRect(0.5, 0.5, GUTTER_W, RULER_H)
   }
+}
+
+/** Pack an 0xRRGGBB color into little-endian ABGR uint32 for ImageData. */
+function packABGR(rgb: number): number {
+  const r = (rgb >> 16) & 0xff
+  const g = (rgb >> 8) & 0xff
+  const b = rgb & 0xff
+  return ((0xff << 24) | (b << 16) | (g << 8) | r) >>> 0
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {

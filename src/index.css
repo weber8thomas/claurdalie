@@ -236,6 +236,65 @@ canvas.grid {
   z-index: 2;
   background: color-mix(in srgb, var(--panel) 70%, transparent);
 }
+.minimap .mm-resize {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  z-index: 2;
+  cursor: nwse-resize;
+  background:
+    linear-gradient(135deg, var(--accent) 0 3px, transparent 3px) no-repeat,
+    linear-gradient(135deg, transparent 4px, var(--accent) 4px 6px, transparent 6px) no-repeat;
+  opacity: 0.7;
+}
+.minimap .mm-resize:hover {
+  opacity: 1;
+}
+
+/* ---- amino-acid hover tooltip ------------------------------------------ */
+.aa-tooltip {
+  position: fixed;
+  z-index: 160;
+  pointer-events: none;
+  min-width: 180px;
+  max-width: 240px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 8px 10px;
+}
+.aa-tt-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.aa-tt-code {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--accent);
+}
+.aa-tt-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.aa-tt-group {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.aa-tt-meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .legend .swatches {
   display: flex;
   flex-wrap: wrap;

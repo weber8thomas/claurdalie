@@ -8,7 +8,9 @@ import { SchemeLegend } from './ui/SchemeLegend'
 import { HelpOverlay } from './ui/HelpOverlay'
 import { ThemeSync } from './ui/ThemeSync'
 import { ContextMenu, type MenuState } from './ui/ContextMenu'
+import { AATooltip } from './ui/AATooltip'
 import type { Hit } from './render/GridRenderer'
+import type { HoverPayload } from './editor/interaction'
 
 export default function App() {
   const [ctrl, setCtrl] = useState<EditorController | null>(null)
@@ -18,6 +20,8 @@ export default function App() {
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [showLegend, setShowLegend] = useState(true)
   const [showMinimap, setShowMinimap] = useState(true)
+  const [minimapSize, setMinimapSize] = useState({ w: 180, h: 120 })
+  const [hover, setHover] = useState<HoverPayload | null>(null)
   const toastTimer = useRef(0)
 
   const showToast = useCallback((msg: string) => {
@@ -63,9 +67,22 @@ export default function App() {
         />
       )}
       <div className="main">
-        <AlignmentCanvas onReady={setCtrl} onToggleHelp={toggleHelp} onContextMenu={openContextMenu} />
+        <AlignmentCanvas
+          onReady={setCtrl}
+          onToggleHelp={toggleHelp}
+          onContextMenu={openContextMenu}
+          onHover={setHover}
+        />
         {ctrl && showLegend && <SchemeLegend ctrl={ctrl} onClose={() => setShowLegend(false)} />}
-        {ctrl && showMinimap && <Minimap ctrl={ctrl} onClose={() => setShowMinimap(false)} />}
+        {ctrl && showMinimap && (
+          <Minimap
+            ctrl={ctrl}
+            width={minimapSize.w}
+            height={minimapSize.h}
+            onResize={(w, h) => setMinimapSize({ w, h })}
+            onClose={() => setShowMinimap(false)}
+          />
+        )}
         {dragging && <div className="dropzone">Drop a FASTA file to load</div>}
       </div>
       {ctrl && <StatusBar ctrl={ctrl} />}
@@ -74,6 +91,7 @@ export default function App() {
       {ctrl && menu && (
         <ContextMenu ctrl={ctrl} menu={menu} onClose={() => setMenu(null)} onToast={showToast} />
       )}
+      {ctrl && hover && !menu && <AATooltip ctrl={ctrl} hover={hover} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   )

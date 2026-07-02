@@ -275,6 +275,17 @@ export class EditorController {
     this.renderer.hover = h
     this.renderer.markDirty()
   }
+  setGutterHover(row: number | null): void {
+    this.renderer.gutterHoverRow = row
+    this.renderer.markDirty()
+  }
+
+  /** Residue char + ungapped position for a cell (for the hover tooltip). */
+  describeCell(v: number, c: number): { char: string; ungapped: number | null } {
+    const code = this.store.residueAt(v, c)
+    if (code === GAP_CODE) return { char: '-', ungapped: null }
+    return { char: residueChar(code), ungapped: this.ungappedIndex(v, c) }
+  }
   clearSelection(): void {
     this.setSelection(null)
   }

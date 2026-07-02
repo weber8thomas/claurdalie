@@ -1,9 +1,17 @@
 import type { EditorController } from './EditorController'
 import type { Selection, ScrollbarHit, Hit } from '../render/GridRenderer'
 
+export interface HoverPayload {
+  clientX: number
+  clientY: number
+  row: number
+  col: number
+}
+
 interface Handlers {
   toggleHelp: () => void
   openContextMenu: (clientX: number, clientY: number, hit: Hit) => void
+  onHover: (info: HoverPayload | null) => void
 }
 
 /**
@@ -24,6 +32,13 @@ export function attachInteraction(
     | { kind: 'reorder'; from: number }
     | { kind: 'scroll'; bar: ScrollbarHit; grab: number }
   let drag: Drag = { kind: 'none' }
+  let lastHoverKey: string | null = null
+  const clearHover = () => {
+    if (lastHoverKey !== null) {
+      lastHoverKey = null
+      handlers.onHover(null)
+    }
+  }
 
   const localXY = (e: PointerEvent | WheelEvent) => {
     const rect = canvas.getBoundingClientRect()
@@ -32,6 +47,7 @@ export function attachInteraction(
 
   const onPointerDown = (e: PointerEvent) => {
     canvas.setPointerCapture(e.pointerId)
+    clearHover()
     const { x, y } = localXY(e)
 
     // Scrollbars take priority (they overlay the grid edges).
@@ -55,6 +71,7 @@ export function attachInteraction(
       if (hit.row >= 0 && hit.row < ctrl.store.height) {
         drag = { kind: 'reorder', from: hit.row }
         r.dropIndex = hit.row
+        canvas.style.cursor = 'grabbing'
         r.markDirty()
       }
       return
@@ -91,15 +108,33 @@ export function attachInteraction(
     }
 
     if (drag.kind === 'none') {
-      // hover crosshair (suppressed over the scrollbars)
+      // Gutter: highlight the row + grip, show grab cursor (draggable).
+      if (hit.region === 'gutter' && hit.row >= 0 && hit.row < ctrl.store.height) {
+        ctrl.setGutterHover(hit.row)
+        ctrl.setHover(null)
+        canvas.style.cursor = 'grab'
+        clearHover()
+        return
+      }
+      ctrl.setGutterHover(null)
       if (r.hitScrollbar(x, y)) {
         ctrl.setHover(null)
+        canvas.style.cursor = 'default'
+        clearHover()
         return
       }
       if (hit.region === 'grid' && hit.row < ctrl.store.height && hit.col < ctrl.store.width && hit.row >= 0 && hit.col >= 0) {
         ctrl.setHover({ row: hit.row, col: hit.col })
+        canvas.style.cursor = 'cell'
+        const key = `${hit.row},${hit.col}`
+        if (key !== lastHoverKey) {
+          lastHoverKey = key
+          handlers.onHover({ clientX: e.clientX, clientY: e.clientY, row: hit.row, col: hit.col })
+        }
       } else {
         ctrl.setHover(null)
+        canvas.style.cursor = 'default'
+        clearHover()
       }
       return
     }
@@ -127,6 +162,7 @@ export function attachInteraction(
     if (drag.kind === 'reorder') {
       const to = r.dropIndex ?? drag.from
       r.dropIndex = null
+      canvas.style.cursor = 'grab'
       ctrl.reorder(drag.from, to)
     }
     if (drag.kind === 'select' && e) {
@@ -138,7 +174,11 @@ export function attachInteraction(
   }
 
   const onPointerLeave = () => {
-    if (drag.kind === 'none') ctrl.setHover(null)
+    if (drag.kind === 'none') {
+      ctrl.setHover(null)
+      ctrl.setGutterHover(null)
+      clearHover()
+    }
   }
 
   const onWheel = (e: WheelEvent) => {
@@ -203,6 +243,9 @@ export function attachInteraction(
       ctrl.shiftTargets(e.key === 'ArrowRight' ? 1 : -1)
       return
     }
+
+    // Gap editing via keyboard only applies in cursor/edit mode.
+    if ((e.key === ' ' || e.key === 'Delete' || e.key === 'Backspace') && !ctrl.cursorMode) return
 
     switch (e.key) {
       case 'F2':
