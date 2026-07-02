@@ -527,13 +527,15 @@ export class GridRenderer {
     ctx.fillRect(0, RULER_H, GUTTER_W, this.cssH - RULER_H)
 
     const sel = this.selection ? this.normSelection(this.selection) : null
-    // Row labels are only legible (and affordable) above a minimum row height.
-    // Zoomed out we skip the per-row text/grip loop entirely.
-    const showNames = this.cellH >= 11
+    // Names use the SAME visibility threshold as residue glyphs, with a font
+    // that scales down with the row height so both fade out together.
+    const showNames = this.cellW >= TEXT_THRESHOLD && this.cellH >= TEXT_THRESHOLD
+    const showGrip = this.cellH >= 14
     if (showNames) {
+      const fontPx = Math.max(8, Math.min(13, Math.round(this.cellH * 0.72)))
       ctx.textBaseline = 'middle'
-      ctx.font = `12px system-ui, sans-serif`
-      const nameX = 26
+      ctx.font = `${fontPx}px system-ui, sans-serif`
+      const nameX = showGrip ? 26 : 8
       for (let v = vis.firstRow; v < vis.lastRow; v++) {
         const y = this.cellY(v)
         if (sel && v >= sel.r0 && v <= sel.r1) {
@@ -550,7 +552,7 @@ export class GridRenderer {
           ctx.globalAlpha = 1
         }
         // Drag handle (grip dots) — brighter on hover to signal draggability.
-        this.drawGrip(9, y + this.cellH / 2, hovered ? t.text : t.mutedText, hovered ? 0.9 : 0.4)
+        if (showGrip) this.drawGrip(9, y + this.cellH / 2, hovered ? t.text : t.mutedText, hovered ? 0.9 : 0.4)
         ctx.fillStyle = toCss(t.text)
         const name = this.store.rowName(v)
         ctx.fillText(this.ellipsize(name, GUTTER_W - nameX - 6), nameX, y + this.cellH / 2, GUTTER_W - nameX - 6)

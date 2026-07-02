@@ -326,13 +326,18 @@ export class EditorController {
   insertGap(): void {
     const t = this.targetRowIds()
     if (!t) return
+    const hadSelection = !!this.renderer.selection
     this.undo.do(t.ids.length > 1 ? insertGapColumn(t.ids, t.col, 1) : new InsertGapCommand(t.ids[0], t.col, 1))
+    // Single-cell typing advances the cursor; a selection is kept intact so you
+    // can keep editing the same block (Space/Delete don't reset it).
+    if (!hadSelection && this.renderer.cursor) {
+      this.setCursor(this.renderer.cursor.row, this.renderer.cursor.col + 1)
+    }
   }
   deleteGap(): void {
     const t = this.targetRowIds()
     if (!t) return
-    const col = Math.max(0, t.col - 0)
-    this.undo.do(t.ids.length > 1 ? deleteGapColumn(t.ids, col, 1) : new DeleteGapCommand(t.ids[0], col, 1))
+    this.undo.do(t.ids.length > 1 ? deleteGapColumn(t.ids, t.col, 1) : new DeleteGapCommand(t.ids[0], t.col, 1))
   }
   /** Delete the gap immediately to the LEFT (backspace behavior). */
   deleteGapLeft(): void {

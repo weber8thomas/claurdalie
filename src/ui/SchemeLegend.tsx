@@ -4,6 +4,7 @@ import { useEditorSnapshot } from './useEditor'
 import { SCHEME_LUTS } from '../color/schemes'
 import { CODE_TO_CHAR, AMINO_ACID_CODES } from '../core/alphabet'
 import { toCss, luminance } from '../color/scheme'
+import { AA_INFO } from '../core/aaInfo'
 
 const LABELS: Record<string, string> = {
   clustal: 'ClustalX — colored where conserved',
@@ -39,9 +40,14 @@ export function SchemeLegend({ ctrl, onClose }: { ctrl: EditorController; onClos
               const c = lut[code]
               const bg = c ?? (snap.dark ? 0x2a2c33 : 0xeaecef)
               const fg = luminance(bg) > 140 ? '#111' : '#fff'
+              const ch = CODE_TO_CHAR[code]
+              const info = AA_INFO[ch]
+              const title = info
+                ? `${ch} · ${info.name} (${info.three}) — ${info.group}${c == null ? ' · not colored in this scheme' : ''}`
+                : ch
               return (
-                <span key={code} className="sw" style={{ background: toCss(bg), color: fg }}>
-                  {CODE_TO_CHAR[code]}
+                <span key={code} className="sw" style={{ background: toCss(bg), color: fg }} title={title}>
+                  {ch}
                 </span>
               )
             })}

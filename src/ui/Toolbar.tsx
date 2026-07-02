@@ -11,8 +11,10 @@ interface Props {
   onToggleHelp: () => void
   showLegend: boolean
   showMinimap: boolean
+  tooltipEnabled: boolean
   onToggleLegend: () => void
   onToggleMinimap: () => void
+  onToggleTooltip: () => void
 }
 
 /** Brand mark: a tiny colored alignment tile (residues + a gap). */
@@ -46,8 +48,10 @@ export function Toolbar({
   onToggleHelp,
   showLegend,
   showMinimap,
+  tooltipEnabled,
   onToggleLegend,
   onToggleMinimap,
+  onToggleTooltip,
 }: Props) {
   const snap = useEditorSnapshot(ctrl)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -186,6 +190,13 @@ export function Toolbar({
           title="Minimap"
         >
           🗺
+        </button>
+        <button
+          className={'icon' + (tooltipEnabled ? ' active' : '')}
+          onClick={onToggleTooltip}
+          title="Residue tooltip on hover"
+        >
+          💬
         </button>
       </div>
 

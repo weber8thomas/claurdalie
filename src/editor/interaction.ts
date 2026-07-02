@@ -254,8 +254,7 @@ export function attachInteraction(
         return
       case ' ':
         e.preventDefault()
-        ctrl.insertGap()
-        ctrl.moveCursor(0, 1)
+        ctrl.insertGap() // advances the cursor itself; keeps any selection intact
         return
       case 'Delete':
         e.preventDefault()

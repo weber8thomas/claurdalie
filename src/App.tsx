@@ -21,6 +21,7 @@ export default function App() {
   const [showLegend, setShowLegend] = useState(true)
   const [showMinimap, setShowMinimap] = useState(true)
   const [minimapSize, setMinimapSize] = useState({ w: 180, h: 120 })
+  const [tooltipEnabled, setTooltipEnabled] = useState(true)
   const [hover, setHover] = useState<HoverPayload | null>(null)
   const toastTimer = useRef(0)
 
@@ -62,8 +63,10 @@ export default function App() {
           onToggleHelp={toggleHelp}
           showLegend={showLegend}
           showMinimap={showMinimap}
+          tooltipEnabled={tooltipEnabled}
           onToggleLegend={() => setShowLegend((s) => !s)}
           onToggleMinimap={() => setShowMinimap((s) => !s)}
+          onToggleTooltip={() => setTooltipEnabled((s) => !s)}
         />
       )}
       <div className="main">
@@ -91,7 +94,7 @@ export default function App() {
       {ctrl && menu && (
         <ContextMenu ctrl={ctrl} menu={menu} onClose={() => setMenu(null)} onToast={showToast} />
       )}
-      {ctrl && hover && !menu && <AATooltip ctrl={ctrl} hover={hover} />}
+      {ctrl && hover && tooltipEnabled && !menu && <AATooltip ctrl={ctrl} hover={hover} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   )
