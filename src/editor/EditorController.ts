@@ -144,6 +144,64 @@ export class EditorController {
     return serializeFasta(this.store.toSequences())
   }
 
+  /** FASTA of a single visual row. */
+  rowFasta(v: number): string {
+    const id = this.store.rowIdAt(v)
+    return serializeFasta([{ name: this.store.getRow(id).name, codes: this.store.materializeRow(id) }])
+  }
+
+  /** FASTA of the current selection rectangle, or null if no selection. */
+  selectionFasta(): string | null {
+    const sel = this.renderer.selection
+    if (!sel) return null
+    const r0 = Math.min(sel.r0, sel.r1)
+    const r1 = Math.max(sel.r0, sel.r1)
+    const c0 = Math.min(sel.c0, sel.c1)
+    const c1 = Math.max(sel.c0, sel.c1)
+    const seqs = []
+    for (let v = r0; v <= r1; v++) {
+      const id = this.store.rowIdAt(v)
+      const full = this.store.materializeRow(id)
+      seqs.push({ name: this.store.getRow(id).name, codes: full.slice(c0, c1 + 1) })
+    }
+    return serializeFasta(seqs)
+  }
+
+  isInSelection(v: number, c: number): boolean {
+    const s = this.renderer.selection
+    if (!s) return false
+    return (
+      v >= Math.min(s.r0, s.r1) &&
+      v <= Math.max(s.r0, s.r1) &&
+      c >= Math.min(s.c0, s.c1) &&
+      c <= Math.max(s.c0, s.c1)
+    )
+  }
+
+  /** Remove every column that is a gap in all sequences (one undo entry). */
+  removeGapOnlyColumns(): number {
+    const w = this.store.width
+    const h = this.store.height
+    const cols: number[] = []
+    for (let c = 0; c < w; c++) {
+      let allGap = true
+      for (let v = 0; v < h; v++) {
+        if (this.store.residueAt(v, c) !== GAP_CODE) {
+          allGap = false
+          break
+        }
+      }
+      if (allGap) cols.push(c)
+    }
+    if (!cols.length) return 0
+    const ids = this.store.orderSnapshot()
+    // Delete right-to-left so earlier column indices stay valid.
+    const cmds = []
+    for (let i = cols.length - 1; i >= 0; i--) cmds.push(deleteGapColumn(ids, cols[i], 1))
+    this.undo.do(sequence('Remove gap-only columns', cmds))
+    return cols.length
+  }
+
   // ---- appearance ---------------------------------------------------------
 
   setSchemeId(id: string): void {
@@ -288,6 +346,13 @@ export class EditorController {
       )
     }
   }
+  /** Move a visual row up/down by `delta` positions (one undo entry). */
+  moveRowBy(v: number, delta: number): void {
+    const to = clampInt(v + delta, 0, this.store.height - 1)
+    if (to === v) return
+    this.undo.do(new ReorderRowsCommand(v, to))
+  }
+
   /** Shift explicit rows (used by shift-drag), coalesced under `key`. */
   shiftRowsById(ids: number[], delta: number, key: string): void {
     if (delta === 0 || ids.length === 0) return

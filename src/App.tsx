@@ -7,12 +7,15 @@ import { Minimap } from './ui/Minimap'
 import { SchemeLegend } from './ui/SchemeLegend'
 import { HelpOverlay } from './ui/HelpOverlay'
 import { ThemeSync } from './ui/ThemeSync'
+import { ContextMenu, type MenuState } from './ui/ContextMenu'
+import type { Hit } from './render/GridRenderer'
 
 export default function App() {
   const [ctrl, setCtrl] = useState<EditorController | null>(null)
   const [help, setHelp] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [menu, setMenu] = useState<MenuState | null>(null)
   const toastTimer = useRef(0)
 
   const showToast = useCallback((msg: string) => {
@@ -22,6 +25,7 @@ export default function App() {
   }, [])
 
   const toggleHelp = useCallback(() => setHelp((h) => !h), [])
+  const openContextMenu = useCallback((x: number, y: number, hit: Hit) => setMenu({ x, y, hit }), [])
 
   const onDrop = async (e: React.DragEvent) => {
     e.preventDefault()
@@ -47,7 +51,7 @@ export default function App() {
     >
       {ctrl && <Toolbar ctrl={ctrl} onToast={showToast} onToggleHelp={toggleHelp} />}
       <div className="main">
-        <AlignmentCanvas onReady={setCtrl} onToggleHelp={toggleHelp} />
+        <AlignmentCanvas onReady={setCtrl} onToggleHelp={toggleHelp} onContextMenu={openContextMenu} />
         {ctrl && <SchemeLegend ctrl={ctrl} />}
         {ctrl && <Minimap ctrl={ctrl} />}
         {dragging && <div className="dropzone">Drop a FASTA file to load</div>}
@@ -55,6 +59,9 @@ export default function App() {
       {ctrl && <StatusBar ctrl={ctrl} />}
       {ctrl && <ThemeSync ctrl={ctrl} />}
       {help && <HelpOverlay onClose={() => setHelp(false)} />}
+      {ctrl && menu && (
+        <ContextMenu ctrl={ctrl} menu={menu} onClose={() => setMenu(null)} onToast={showToast} />
+      )}
       {toast && <div className="toast">{toast}</div>}
     </div>
   )

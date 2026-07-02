@@ -314,3 +314,45 @@ kbd {
   color: var(--muted);
   font-size: 12px;
 }
+
+/* ---- context menu ------------------------------------------------------- */
+.ctx-menu {
+  position: fixed;
+  z-index: 150;
+  min-width: 220px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 4px;
+  animation: fade var(--dur) ease;
+}
+.ctx-item {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.ctx-item:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.ctx-item:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+.ctx-item.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
+}
+.ctx-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 6px;
+}

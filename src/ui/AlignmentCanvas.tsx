@@ -3,13 +3,15 @@ import { EditorController } from '../editor/EditorController'
 import { attachInteraction } from '../editor/interaction'
 import { parseFasta } from '../core/io/fasta'
 import { LIGHT_FASTA } from '../datasets/light'
+import type { Hit } from '../render/GridRenderer'
 
 interface Props {
   onReady: (ctrl: EditorController) => void
   onToggleHelp: () => void
+  onContextMenu: (x: number, y: number, hit: Hit) => void
 }
 
-export function AlignmentCanvas({ onReady, onToggleHelp }: Props) {
+export function AlignmentCanvas({ onReady, onToggleHelp, onContextMenu }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -27,7 +29,10 @@ export function AlignmentCanvas({ onReady, onToggleHelp }: Props) {
     const ro = new ResizeObserver(applySize)
     ro.observe(wrap)
 
-    const detach = attachInteraction(canvas, ctrl, { toggleHelp: onToggleHelp })
+    const detach = attachInteraction(canvas, ctrl, {
+      toggleHelp: onToggleHelp,
+      openContextMenu: onContextMenu,
+    })
     onReady(ctrl)
 
     return () => {

@@ -1,8 +1,9 @@
 import type { EditorController } from './EditorController'
-import type { Selection, ScrollbarHit } from '../render/GridRenderer'
+import type { Selection, ScrollbarHit, Hit } from '../render/GridRenderer'
 
 interface Handlers {
   toggleHelp: () => void
+  openContextMenu: (clientX: number, clientY: number, hit: Hit) => void
 }
 
 /**
@@ -283,6 +284,16 @@ export function attachInteraction(
     }
   }
 
+  const onContextMenu = (e: MouseEvent) => {
+    const { x, y } = localXY(e as unknown as WheelEvent)
+    const hit = r.hitTest(x, y)
+    if (hit.region === 'grid' || hit.region === 'gutter') {
+      e.preventDefault()
+      handlers.openContextMenu(e.clientX, e.clientY, hit)
+    }
+  }
+
+  canvas.addEventListener('contextmenu', onContextMenu)
   canvas.addEventListener('pointerdown', onPointerDown)
   canvas.addEventListener('pointermove', onPointerMove)
   canvas.addEventListener('pointerup', onPointerUp)
@@ -291,6 +302,7 @@ export function attachInteraction(
   window.addEventListener('keydown', onKeyDown)
 
   return () => {
+    canvas.removeEventListener('contextmenu', onContextMenu)
     canvas.removeEventListener('pointerdown', onPointerDown)
     canvas.removeEventListener('pointermove', onPointerMove)
     canvas.removeEventListener('pointerup', onPointerUp)
