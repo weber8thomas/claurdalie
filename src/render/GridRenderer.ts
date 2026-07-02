@@ -527,29 +527,42 @@ export class GridRenderer {
     ctx.fillRect(0, RULER_H, GUTTER_W, this.cssH - RULER_H)
 
     const sel = this.selection ? this.normSelection(this.selection) : null
-    ctx.textBaseline = 'middle'
-    ctx.font = `12px system-ui, sans-serif`
-    const nameX = 26
-    for (let v = vis.firstRow; v < vis.lastRow; v++) {
-      const y = this.cellY(v)
-      if (sel && v >= sel.r0 && v <= sel.r1) {
-        ctx.fillStyle = toCss(t.selection)
-        ctx.globalAlpha = 0.14
-        ctx.fillRect(0, y, GUTTER_W, this.cellH)
-        ctx.globalAlpha = 1
+    // Row labels are only legible (and affordable) above a minimum row height.
+    // Zoomed out we skip the per-row text/grip loop entirely.
+    const showNames = this.cellH >= 11
+    if (showNames) {
+      ctx.textBaseline = 'middle'
+      ctx.font = `12px system-ui, sans-serif`
+      const nameX = 26
+      for (let v = vis.firstRow; v < vis.lastRow; v++) {
+        const y = this.cellY(v)
+        if (sel && v >= sel.r0 && v <= sel.r1) {
+          ctx.fillStyle = toCss(t.selection)
+          ctx.globalAlpha = 0.14
+          ctx.fillRect(0, y, GUTTER_W, this.cellH)
+          ctx.globalAlpha = 1
+        }
+        const hovered = v === this.gutterHoverRow
+        if (hovered) {
+          ctx.fillStyle = toCss(t.hover)
+          ctx.globalAlpha = 0.16
+          ctx.fillRect(0, y, GUTTER_W, this.cellH)
+          ctx.globalAlpha = 1
+        }
+        // Drag handle (grip dots) — brighter on hover to signal draggability.
+        this.drawGrip(9, y + this.cellH / 2, hovered ? t.text : t.mutedText, hovered ? 0.9 : 0.4)
+        ctx.fillStyle = toCss(t.text)
+        const name = this.store.rowName(v)
+        ctx.fillText(this.ellipsize(name, GUTTER_W - nameX - 6), nameX, y + this.cellH / 2, GUTTER_W - nameX - 6)
       }
-      const hovered = v === this.gutterHoverRow
-      if (hovered) {
-        ctx.fillStyle = toCss(t.hover)
-        ctx.globalAlpha = 0.16
-        ctx.fillRect(0, y, GUTTER_W, this.cellH)
-        ctx.globalAlpha = 1
-      }
-      // Drag handle (grip dots) — brighter on hover to signal draggability.
-      this.drawGrip(9, y + this.cellH / 2, hovered ? t.text : t.mutedText, hovered ? 0.9 : 0.4)
-      ctx.fillStyle = toCss(t.text)
-      const name = this.store.rowName(v)
-      ctx.fillText(this.ellipsize(name, GUTTER_W - nameX - 6), nameX, y + this.cellH / 2, GUTTER_W - nameX - 6)
+    } else if (sel) {
+      // Zoomed out: mark the selected row band as a single rect (no text).
+      const y = this.cellY(sel.r0)
+      const yEnd = this.cellY(sel.r1 + 1)
+      ctx.fillStyle = toCss(t.selection)
+      ctx.globalAlpha = 0.25
+      ctx.fillRect(0, y, GUTTER_W, Math.max(1, yEnd - y))
+      ctx.globalAlpha = 1
     }
 
     // Drag-reorder drop indicator.
