@@ -1,7 +1,7 @@
 {
   "name": "claurdalie",
   "private": true,
-  "version": "0.4.0-beta.0",
+  "version": "0.5.0-beta.0",
   "type": "module",
   "description": "High-performance web-based multiple sequence alignment (MSA) editor",
   "scripts": {

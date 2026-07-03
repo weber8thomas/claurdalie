@@ -14,8 +14,10 @@ import { StructurePanel } from './ui/StructurePanel'
 import { StructureController } from './structure/StructureController'
 import { SnapshotBar } from './ui/SnapshotBar'
 import { ScoresPanel } from './ui/ScoresPanel'
+import { ClusterDialog } from './ui/ClusterDialog'
 import { ProjectStore, type ProjectHost } from './project/ProjectStore'
 import { ConservationModel } from './analysis/conservation/ConservationModel'
+import { GroupModel } from './analysis/cluster/GroupModel'
 import type { SerializableModule } from './project/types'
 import { loadPrefs, savePrefs } from './editor/persistence'
 import type { Hit } from './render/GridRenderer'
@@ -32,9 +34,11 @@ export default function App() {
   const [showMinimap, setShowMinimap] = useState(() => loadPrefs().showMinimap ?? true)
   const [showStructure, setShowStructure] = useState(() => loadPrefs().showStructure ?? false)
   const [showScores, setShowScores] = useState(() => loadPrefs().showScores ?? false)
+  const [showCluster, setShowCluster] = useState(false)
   const [structure, setStructure] = useState<StructureController | null>(null)
   const [project, setProject] = useState<ProjectStore | null>(null)
   const [conservation, setConservation] = useState<ConservationModel | null>(null)
+  const [groups, setGroups] = useState<GroupModel | null>(null)
   const [minimapSize, setMinimapSize] = useState(() => {
     const p = loadPrefs()
     return { w: p.minimapW ?? 180, h: p.minimapH ?? 120 }
@@ -85,6 +89,12 @@ export default function App() {
   useEffect(() => {
     if (!ctrl) return
     const model = new ConservationModel(ctrl)
+    const groupModel = new GroupModel(ctrl)
+    // Per-group conservation tracks: feed group subsets to the conservation model
+    // and recompute shown tracks whenever the grouping changes.
+    model.setGroupProvider(() => groupModel.groups().map((g) => ({ id: g.clusterId, rows: g.rows })))
+    const offGroups = groupModel.subscribe(() => model.refresh())
+
     const host: ProjectHost = {
       captureSequences: () => ctrl.store.toSequences(),
       loadSequences: (seqs) => ctrl.loadSnapshotSequences(seqs),
@@ -97,14 +107,21 @@ export default function App() {
       serialize: () => ctrl.viewState(),
       hydrate: (s) => ctrl.applyViewState(s),
     }
+    // Groups hydrate BEFORE conservation so per-group tracks are available when
+    // conservation recomputes on a snapshot switch.
+    proj.register(groupModel)
     proj.register(model)
     proj.register(viewSlice)
     proj.init('Original')
     setConservation(model)
+    setGroups(groupModel)
     setProject(proj)
     return () => {
+      offGroups()
       model.destroy()
+      groupModel.destroy()
       setConservation(null)
+      setGroups(null)
       setProject(null)
     }
   }, [ctrl])
@@ -144,11 +161,13 @@ export default function App() {
           showMinimap={showMinimap}
           showStructure={showStructure}
           showScores={showScores}
+          showCluster={showCluster}
           tooltipEnabled={tooltipEnabled}
           onToggleLegend={() => setShowLegend((s) => !s)}
           onToggleMinimap={() => setShowMinimap((s) => !s)}
           onToggleStructure={() => setShowStructure((s) => !s)}
           onToggleScores={() => setShowScores((s) => !s)}
+          onToggleCluster={() => setShowCluster((s) => !s)}
           onToggleTooltip={() => setTooltipEnabled((s) => !s)}
         />
       )}
@@ -170,6 +189,9 @@ export default function App() {
             onClose={() => setShowMinimap(false)}
           />
         )}
+        {ctrl && groups && showCluster && (
+          <ClusterDialog ctrl={ctrl} group={groups} onClose={() => setShowCluster(false)} onToast={showToast} />
+        )}
         {ctrl && structure && showStructure && (
           <StructurePanel
             ctrl={ctrl}
@@ -185,7 +207,7 @@ export default function App() {
         {dragging && <div className="dropzone">Drop a FASTA file to load</div>}
       </div>
       {ctrl && conservation && showScores && (
-        <ScoresPanel ctrl={ctrl} model={conservation} onClose={() => setShowScores(false)} />
+        <ScoresPanel ctrl={ctrl} model={conservation} group={groups} onClose={() => setShowScores(false)} />
       )}
       {ctrl && <StatusBar ctrl={ctrl} onAbout={() => setAbout(true)} />}
       {ctrl && <ThemeSync ctrl={ctrl} />}

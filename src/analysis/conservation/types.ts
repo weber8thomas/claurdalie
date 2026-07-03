@@ -34,6 +34,8 @@ export interface ScoreTrack {
   scores: Float32Array
   /** Optional per-column conservation label (from the "automatic" step). */
   labels?: Uint8Array // 0 none, 1 globally conserved, 2 strictly conserved
+  /** Optional per-group scores (same method, restricted to each group's rows). */
+  groupScores?: { id: number; scores: Float32Array }[]
 }
 
 export const METHODS: ConservationMethodInfo[] = [

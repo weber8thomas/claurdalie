@@ -45,4 +45,25 @@ describe('computeConservation', () => {
     expect(res.tracks.threshold.labels).toBeInstanceOf(Uint8Array)
     expect(res.tracks.threshold.labels!.length).toBe(width)
   })
+
+  it('computes per-group tracks restricted to each group’s rows', () => {
+    // Group 0 = rows {0,2} (A,A at col0 → conserved), group 1 = row {1} (A too).
+    const res = computeConservation({
+      flat,
+      nRows,
+      width,
+      methods: ['threshold'],
+      groups: [
+        { id: 0, rows: [0, 2] },
+        { id: 1, rows: [1] },
+      ],
+    })
+    const gs = res.tracks.threshold.groupScores!
+    expect(gs).toHaveLength(2)
+    expect(gs[0].id).toBe(0)
+    // Group 0 col0 is A,A → fully conserved.
+    expect(gs[0].scores[0]).toBeCloseTo(100, 5)
+    // Group 1 col1 is a single C → conserved within the group.
+    expect(gs[1].scores[1]).toBeCloseTo(100, 5)
+  })
 })

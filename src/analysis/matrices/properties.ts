@@ -47,6 +47,37 @@ export const HYDROPATHY = codeTable({
  * `|Σv| / Σ|v|` drops — exactly the "shared physical constraint" signal the
  * method is meant to capture.
  */
+// EMBOSS side-chain pKa values (Epka.dat) + terminal pKa, for the isoelectric
+// point (pI) clustering criterion. Only ionizable side chains listed.
+const PKA_SIDE: Record<string, number> = {
+  D: 3.9, E: 4.1, C: 8.5, Y: 10.1, H: 6.5, K: 10.8, R: 12.5,
+}
+const PKA_NTERM = 8.6
+const PKA_CTERM = 3.6
+
+/** Net charge of a sequence (by residue counts) at a given pH. */
+function netCharge(counts: Record<string, number>, pH: number): number {
+  const pos = (pk: number, n: number) => n / (1 + 10 ** (pH - pk))
+  const neg = (pk: number, n: number) => -n / (1 + 10 ** (pk - pH))
+  let c = pos(PKA_NTERM, 1) + neg(PKA_CTERM, 1)
+  c += pos(PKA_SIDE.K, counts.K ?? 0) + pos(PKA_SIDE.R, counts.R ?? 0) + pos(PKA_SIDE.H, counts.H ?? 0)
+  c += neg(PKA_SIDE.D, counts.D ?? 0) + neg(PKA_SIDE.E, counts.E ?? 0)
+  c += neg(PKA_SIDE.C, counts.C ?? 0) + neg(PKA_SIDE.Y, counts.Y ?? 0)
+  return c
+}
+
+/** Isoelectric point via bisection on net charge (EMBOSS-style, pH 0..14). */
+export function isoelectricPoint(counts: Record<string, number>): number {
+  let lo = 0
+  let hi = 14
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2
+    if (netCharge(counts, mid) > 0) lo = mid
+    else hi = mid
+  }
+  return (lo + hi) / 2
+}
+
 export interface PropertyVectors {
   /** code → [z(volume), z(polarity)], or null for non-standard residues. */
   vectors: (Float64Array | null)[]

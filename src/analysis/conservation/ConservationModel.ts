@@ -23,6 +23,17 @@ export class ConservationModel implements SerializableModule<ConservationSlice> 
   private lastContentVersion: number
   private recomputeTimer = 0
   private computing = new Set<ConservationMethodId>()
+  private groupProvider: (() => { id: number; rows: number[] }[]) | null = null
+
+  /** Supply the current per-group row subsets so tracks include per-group lines. */
+  setGroupProvider(fn: (() => { id: number; rows: number[] }[]) | null): void {
+    this.groupProvider = fn
+  }
+  /** Force a recompute of shown tracks (e.g. when grouping changes). */
+  refresh(): void {
+    this.tracks.clear()
+    this.scheduleRecompute()
+  }
 
   constructor(private ctrl: EditorController) {
     this.lastContentVersion = ctrl.getContentVersion()
@@ -91,7 +102,8 @@ export class ConservationModel implements SerializableModule<ConservationSlice> 
 
   private async compute(m: ConservationMethodId): Promise<ScoreTrack> {
     const { flat, nRows, width } = this.flatten()
-    const res = await this.client.conservation({ flat, nRows, width, methods: [m], labels: true })
+    const groups = this.groupProvider?.().filter((g) => g.rows.length > 0)
+    const res = await this.client.conservation({ flat, nRows, width, methods: [m], labels: true, groups })
     return res.tracks[m]
   }
 

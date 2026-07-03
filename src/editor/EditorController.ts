@@ -644,6 +644,20 @@ export class EditorController {
     this.selectRow(adjusted)
   }
 
+  /** Reorder all rows to an explicit id order as one undo entry (used by grouping). */
+  reorderToOrder(newOrder: number[]): void {
+    const before = this.store.orderSnapshot()
+    if (newOrder.length === before.length && newOrder.every((id, i) => id === before[i])) return
+    this.undo.do(new ReorderBlockCommand(before, newOrder))
+  }
+
+  /** Optional per-row group color, drawn as a gutter stripe by the renderer. */
+  setGroupColorHook(fn: ((visualRow: number) => string | null) | null): void {
+    this.renderer.groupColorOf = fn
+    this.renderer.markDirty()
+    this.bump()
+  }
+
   undoAction(): void {
     this.undo.undo()
   }

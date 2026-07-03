@@ -31,6 +31,7 @@ const PATHS: Record<string, string[]> = {
   x: ['M18 6 6 18', 'M6 6l12 12'],
   cube: ['M21 7.5 12 3 3 7.5v9L12 21l9-4.5v-9z', 'M3 7.5 12 12l9-4.5', 'M12 12v9'],
   chart: ['M3 3v18h18', 'M7 16v-5', 'M12 16V8', 'M17 16v-8'],
+  group: ['M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2', 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8', 'M23 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'],
 }
 
 export function Icon({ name, size = 16 }: { name: keyof typeof PATHS | string; size?: number }) {

@@ -29,11 +29,13 @@ interface Props {
   showMinimap: boolean
   showStructure: boolean
   showScores: boolean
+  showCluster: boolean
   tooltipEnabled: boolean
   onToggleLegend: () => void
   onToggleMinimap: () => void
   onToggleStructure: () => void
   onToggleScores: () => void
+  onToggleCluster: () => void
   onToggleTooltip: () => void
 }
 
@@ -54,11 +56,13 @@ export function Toolbar({
   showMinimap,
   showStructure,
   showScores,
+  showCluster,
   tooltipEnabled,
   onToggleLegend,
   onToggleMinimap,
   onToggleStructure,
   onToggleScores,
+  onToggleCluster,
   onToggleTooltip,
 }: Props) {
   const snap = useEditorSnapshot(ctrl)
@@ -197,6 +201,13 @@ export function Toolbar({
           title="Conservation scores"
         >
           <Icon name="chart" />
+        </button>
+        <button
+          className={'icon' + (showCluster ? ' active' : '')}
+          onClick={onToggleCluster}
+          title="Clustering & groups"
+        >
+          <Icon name="group" />
         </button>
         <button
           className={'icon' + (showStructure ? ' active' : '')}
