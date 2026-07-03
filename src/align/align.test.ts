@@ -123,6 +123,47 @@ describe('EbiMafftAligner error mapping', () => {
     expect(Array.from(out[0].codes)).toEqual([A, GAP, C])
     expect(Array.from(out[1].codes)).toEqual([A, D, GAP])
   })
+
+  it('fetches the `fa` result type, not the nonexistent `aln-fasta`', async () => {
+    const seen: string[] = []
+    const aligner = new EbiMafftAligner({
+      fetchImpl: (async (url: string) => {
+        if (url.includes('/run')) return new Response('job1', { status: 200 })
+        if (url.includes('/status/')) return new Response('FINISHED', { status: 200 })
+        if (url.includes('/result/')) {
+          seen.push(url)
+          return new Response('>s0\nA-C\n>s1\nAD-\n', { status: 200 })
+        }
+        throw new Error(`unrouted ${url}`)
+      }) as unknown as typeof fetch,
+    })
+    await aligner.align(two)
+    expect(seen).toHaveLength(1)
+    expect(seen[0]).toMatch(/\/result\/job1\/fa$/)
+    expect(seen[0]).not.toContain('aln-fasta')
+  })
+
+  it('falls back to the `out` result type when `fa` is unavailable', async () => {
+    const seen: string[] = []
+    const aligner = new EbiMafftAligner({
+      fetchImpl: (async (url: string) => {
+        if (url.includes('/run')) return new Response('job1', { status: 200 })
+        if (url.includes('/status/')) return new Response('FINISHED', { status: 200 })
+        if (url.endsWith('/fa')) {
+          seen.push('fa')
+          return new Response('not available', { status: 404 })
+        }
+        if (url.endsWith('/out')) {
+          seen.push('out')
+          return new Response('>s0\nA-C\n>s1\nAD-\n', { status: 200 })
+        }
+        throw new Error(`unrouted ${url}`)
+      }) as unknown as typeof fetch,
+    })
+    const out = await aligner.align(two)
+    expect(seen).toEqual(['fa', 'out'])
+    expect(Array.from(out[0].codes)).toEqual([A, GAP, C])
+  })
 })
 
 describe('AioliKalignAligner error mapping', () => {
@@ -156,6 +197,36 @@ describe('AioliKalignAligner error mapping', () => {
     const out = await aligner.align(two)
     expect(out.map((o) => o.name)).toEqual(['a', 'b'])
     expect(Array.from(out[0].codes)).toEqual([A, GAP, C])
+  })
+
+  it('reads Aioli from globalThis when the UMD bundle exposes no default export', async () => {
+    // Mirrors biowasm's real v3 bundle: importing it exposes no `default`;
+    // the IIFE has assigned the constructor to globalThis.Aioli instead.
+    const cli = {
+      mount: async () => {},
+      exec: async () => {},
+      cat: async () => '>s0\nA-C\n>s1\nAD-\n',
+    }
+    const g = globalThis as { Aioli?: unknown }
+    g.Aioli = class {
+      constructor() {
+        return Promise.resolve(cli)
+      }
+    }
+    try {
+      // Loader resolves to an empty namespace (no `default`, no `Aioli`).
+      const aligner = new AioliKalignAligner((() => Promise.resolve({})) as never)
+      const out = await aligner.align(two)
+      expect(out.map((o) => o.name)).toEqual(['a', 'b'])
+      expect(Array.from(out[0].codes)).toEqual([A, GAP, C])
+    } finally {
+      delete g.Aioli
+    }
+  })
+
+  it('maps a module with no usable Aioli constructor to unavailable', async () => {
+    const aligner = new AioliKalignAligner((() => Promise.resolve({})) as never)
+    await expect(aligner.align(two)).rejects.toMatchObject({ kind: 'unavailable' })
   })
 })
 
