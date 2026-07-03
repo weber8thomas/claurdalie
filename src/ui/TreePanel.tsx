@@ -3,6 +3,8 @@ import type { EditorController } from '../editor/EditorController'
 import type { TreeModel, TreeColorBy } from '../tree/TreeModel'
 import type { GroupModel } from '../analysis/cluster/GroupModel'
 import { layoutTree, radialXY, type LaidNode } from '../tree/layout'
+import { treeStats, nodeInfo, patristic, type NodeInfo } from '../tree/metrics'
+import { serializeNewick } from '../tree/newick'
 import type { GapHandling } from '../analysis/cluster/distance'
 import { useEditorSnapshot } from './useEditor'
 
@@ -14,11 +16,17 @@ interface Props {
   onToast: (msg: string) => void
 }
 
+interface HoverState {
+  x: number
+  y: number
+  lines: string[]
+}
+
 export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
   const snap = useEditorSnapshot(ctrl)
   useSyncExternalStore(
     (fn) => model.subscribe(fn),
-    () => `${model.mode}|${model.colorBy}|${model.showBootstrap}|${model.isComputing()}|${model.current() ? 1 : 0}`,
+    () => `${model.mode}|${model.colorBy}|${model.showBootstrap}|${model.branchLengths}|${model.isComputing()}|${model.version()}`,
   )
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -26,6 +34,19 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
   const drag = useRef<{ x: number; y: number } | null>(null)
   const [gap, setGap] = useState<GapHandling>('pairwise')
   const [boot, setBoot] = useState(false)
+  const [query, setQuery] = useState('')
+  const [sel, setSel] = useState<number[]>([])
+  const [dist, setDist] = useState<number | null>(null)
+  const [hover, setHover] = useState<HoverState | null>(null)
+
+  // Live snapshot of highlight state the imperative draw() reads without
+  // re-creating the render effect on every keystroke / selection.
+  const dyn = useRef({ query, sel })
+  dyn.current.query = query
+  dyn.current.sel = sel
+
+  const tree = model.current()
+  const stats = tree ? treeStats(tree) : null
 
   // Leaf name → cluster color (when coloring by cluster).
   const nameColor = useMemo(() => {
@@ -49,7 +70,7 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
       const dpr = window.devicePixelRatio || 1
       const rect = wrap.getBoundingClientRect()
       const W = rect.width
-      const H = Math.max(120, rect.height - 88)
+      const H = rect.height
       canvas.width = Math.round(W * dpr)
       canvas.height = Math.round(H * dpr)
       canvas.style.width = `${W}px`
@@ -65,9 +86,14 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
         ctx.fillText('No tree yet — press Build.', 16, 28)
         return
       }
-      const layout = layoutTree(tree)
+      const layout = layoutTree(tree, { cladogram: !model.branchLengths })
       const { scale, ox, oy } = view.current
       const nodes = [...layout.nodes.values()]
+
+      // Highlight state read live from the ref.
+      const q = dyn.current.query.trim().toLowerCase()
+      const matchSet = q ? new Set(tree.leaves.filter((n) => n.toLowerCase().includes(q)).map((n) => n.toLowerCase())) : null
+      const selSet = new Set(dyn.current.sel)
 
       ctx.lineWidth = 1.5
       ctx.lineJoin = 'round'
@@ -75,6 +101,8 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
       ctx.strokeStyle = th.edge
       ctx.font = `12px ${th.font}`
       ctx.textBaseline = 'middle'
+
+      const deco = { matchSet, selSet, nameColor, th }
 
       if (model.mode === 'dendrogram') {
         const margin = 12
@@ -107,11 +135,9 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
           }
         }
         const leafSpacing = layout.leafCount > 1 ? plotH / (layout.leafCount - 1) : plotH
-        drawDecorations(ctx, nodes, (n) => ({ x: px(n.x), y: py(n.y) }), tree, model, nameColor, th, {
-          dendro: true,
-          maxLabelW: W - margin - 11,
-          leafSpacing,
-        })
+        drawDecorations(ctx, nodes, (n) => ({ x: px(n.x), y: py(n.y) }), tree, model, deco, { dendro: true, maxLabelW: W - margin - 11, leafSpacing })
+        // scale bar (only meaningful when x encodes branch length)
+        if (model.branchLengths && layout.maxDepth > 0) drawScaleBar(ctx, W, H, plotW, layout.maxDepth, th)
       } else {
         const cx = W / 2 + ox
         const cy = H / 2 + oy
@@ -121,7 +147,7 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
           y: cy + radius * R * Math.sin(angle),
         })
         // edges — an arc at the parent's radius spanning its children, then a
-        // radial spoke out to each child (classic radial phylogram).
+        // radial spoke out to each child (classic radial cladogram).
         for (const ln of nodes) {
           if (ln.node.children.length === 0) continue
           const kids = ln.node.children.map((c) => layout.nodes.get(c.id)!)
@@ -142,11 +168,7 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
             ctx.stroke()
           }
         }
-        drawDecorations(ctx, nodes, (n) => polar(n.radius, n.angle), tree, model, nameColor, th, {
-          dendro: false,
-          maxLabelW: 150,
-          leafSpacing: Infinity,
-        })
+        drawDecorations(ctx, nodes, (n) => polar(n.radius, n.angle), tree, model, deco, { dendro: false, maxLabelW: 150, leafSpacing: Infinity })
       }
     }
 
@@ -165,7 +187,11 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
 
   const redraw = () => (canvasRef.current as any)?.__draw?.()
 
-  // Interaction: drag to pan, wheel to zoom, click to re-root, shift-click to swap.
+  // Redraw when highlight state (search / selection) changes.
+  useEffect(redraw, [query, sel])
+
+  // Interaction: drag to pan, wheel to zoom, hover for info, click to re-root,
+  // shift-click to swap, alt-click two tips to measure their distance.
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault()
     const f = e.deltaY < 0 ? 1.1 : 1 / 1.1
@@ -174,24 +200,63 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
   }
   const onDown = (e: React.MouseEvent) => {
     drag.current = { x: e.clientX - view.current.ox, y: e.clientY - view.current.oy }
+    setHover(null)
+  }
+  const localXY = (e: React.MouseEvent) => {
+    const rect = canvasRef.current!.getBoundingClientRect()
+    return { mx: e.clientX - rect.left, my: e.clientY - rect.top }
   }
   const onMove = (e: React.MouseEvent) => {
-    if (!drag.current) return
-    view.current.ox = e.clientX - drag.current.x
-    view.current.oy = e.clientY - drag.current.y
-    redraw()
+    if (drag.current) {
+      view.current.ox = e.clientX - drag.current.x
+      view.current.oy = e.clientY - drag.current.y
+      redraw()
+      return
+    }
+    const tree = model.current()
+    const canvas = canvasRef.current
+    if (!tree || !canvas) return
+    const { mx, my } = localXY(e)
+    const hit = hitTest(canvas, model, mx, my)
+    if (hit === null) {
+      if (hover) setHover(null)
+      return
+    }
+    const info = nodeInfo(tree, hit)
+    if (info) setHover({ x: mx, y: my, lines: tipLines(info) })
   }
   const onUp = () => (drag.current = null)
+  const onLeave = () => {
+    drag.current = null
+    setHover(null)
+  }
   const onClick = (e: React.MouseEvent) => {
     const tree = model.current()
     const canvas = canvasRef.current
     if (!tree || !canvas) return
-    // Hit-test against drawn node positions (recompute the same mapping).
-    const rect = canvas.getBoundingClientRect()
-    const mx = e.clientX - rect.left
-    const my = e.clientY - rect.top
+    const { mx, my } = localXY(e)
     const hit = hitTest(canvas, model, mx, my)
     if (hit === null) return
+    if (e.altKey) {
+      // Measure patristic distance between two tips.
+      const node = model.nodeById(hit)
+      if (!node || node.children.length > 0) {
+        onToast('Alt-click a tip (leaf) to measure')
+        return
+      }
+      const cur = dyn.current.sel
+      const next = cur.length >= 2 || cur.includes(hit) ? [hit] : [...cur, hit]
+      setSel(next)
+      if (next.length === 2) {
+        const d = patristic(tree, next[0], next[1])
+        setDist(d)
+        onToast(d == null ? 'No path' : `Distance ${fmtNum(d)}`)
+      } else {
+        setDist(null)
+        onToast('Pick a second tip')
+      }
+      return
+    }
     if (e.shiftKey) {
       model.swapAt(hit)
       onToast('Swapped node')
@@ -204,12 +269,49 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
 
   const buildTree = async () => {
     await model.build({ gap, zones: [], bootstrap: boot ? 100 : 0 })
+    setSel([])
+    setDist(null)
     onToast(model.current() ? `Tree built (${ctrl.store.height} leaves)` : 'Tree build failed')
     redraw()
   }
 
+  const copyNewick = async () => {
+    const t = model.current()
+    if (!t) return
+    try {
+      await navigator.clipboard.writeText(serializeNewick(t))
+      onToast('Newick copied')
+    } catch {
+      onToast('Copy failed')
+    }
+  }
+  const saveNewick = () => {
+    const t = model.current()
+    if (!t) return
+    downloadBlob(new Blob([serializeNewick(t)], { type: 'text/plain' }), 'tree.nwk')
+    onToast('Saved tree.nwk')
+  }
+  const savePNG = () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const out = document.createElement('canvas')
+    out.width = canvas.width
+    out.height = canvas.height
+    const octx = out.getContext('2d')!
+    octx.fillStyle = readTreeTheme(snap.dark).panel
+    octx.fillRect(0, 0, out.width, out.height)
+    octx.drawImage(canvas, 0, 0)
+    const a = document.createElement('a')
+    a.href = out.toDataURL('image/png')
+    a.download = 'tree.png'
+    a.click()
+    onToast('Saved tree.png')
+  }
+
+  const hasTree = !!tree
+
   return (
-    <div className="tree-panel" ref={wrapRef}>
+    <div className="tree-panel">
       <div className="tree-head">
         <span className="scores-title">Phylogenetic tree</span>
         <button className="scores-close" onClick={onClose} title="Close">
@@ -241,17 +343,63 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
           <input type="checkbox" checked={model.showBootstrap} onChange={(e) => model.setShowBootstrap(e.target.checked)} /> Support
         </label>
       </div>
-      <canvas
-        ref={canvasRef}
-        className="tree-canvas"
-        onWheel={onWheel}
-        onMouseDown={onDown}
-        onMouseMove={onMove}
-        onMouseUp={onUp}
-        onMouseLeave={onUp}
-        onClick={onClick}
-      />
-      <div className="tree-hint">drag to pan · wheel to zoom · click a node to re-root · shift-click to swap</div>
+      <div className="tree-controls tree-controls-2">
+        <input
+          className="tree-search"
+          type="search"
+          placeholder="Search tips…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          disabled={!hasTree}
+        />
+        <button className="btn" onClick={() => model.ladderize()} disabled={!hasTree} title="Sort clades by subtree size">
+          Ladderize
+        </button>
+        <label className="cluster-check" title="Scale branches by evolutionary distance (phylogram) vs equal steps (cladogram)">
+          <input type="checkbox" checked={model.branchLengths} onChange={(e) => model.setBranchLengths(e.target.checked)} /> Branch lengths
+        </label>
+        <div className="tree-spacer" />
+        <button className="btn" onClick={() => void copyNewick()} disabled={!hasTree} title="Copy Newick to clipboard">
+          Copy Newick
+        </button>
+        <button className="btn" onClick={saveNewick} disabled={!hasTree} title="Download Newick (.nwk)">
+          .nwk
+        </button>
+        <button className="btn" onClick={savePNG} disabled={!hasTree} title="Save tree image (.png)">
+          PNG
+        </button>
+      </div>
+      <div className="tree-canvas-wrap" ref={wrapRef}>
+        <canvas
+          ref={canvasRef}
+          className="tree-canvas"
+          onWheel={onWheel}
+          onMouseDown={onDown}
+          onMouseMove={onMove}
+          onMouseUp={onUp}
+          onMouseLeave={onLeave}
+          onClick={onClick}
+        />
+        {hover && (
+          <div className="tree-tip" style={{ left: hover.x + 12, top: hover.y + 12 }}>
+            {hover.lines.map((l, i) => (
+              <div key={i} className={i === 0 ? 'tree-tip-title' : undefined}>
+                {l}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="tree-foot">
+        {stats && (
+          <span className="tree-stats">
+            {stats.leaves} tips · length {fmtNum(stats.totalLength)} · height {fmtNum(stats.height)} · mean {fmtNum(stats.meanBranch)}
+          </span>
+        )}
+        {dist != null && <span className="tree-dist">distance {fmtNum(dist)}</span>}
+        <span className="tree-spacer" />
+        <span className="tree-hint">drag pan · wheel zoom · click re-root · shift swap · alt-click 2 tips to measure</span>
+      </div>
     </div>
   )
 }
@@ -298,6 +446,13 @@ function truncate(ctx: CanvasRenderingContext2D, text: string, maxW: number): st
   return lo > 0 ? text.slice(0, lo) + ell : ''
 }
 
+interface DecoState {
+  matchSet: Set<string> | null
+  selSet: Set<number>
+  nameColor: Map<string, string>
+  th: TreeTheme
+}
+
 interface DecoOpts {
   dendro: boolean
   maxLabelW: number
@@ -311,11 +466,11 @@ function drawDecorations(
   pos: (n: LaidNode) => { x: number; y: number },
   tree: ReturnType<TreeModel['current']>,
   model: TreeModel,
-  nameColor: Map<string, string>,
-  th: TreeTheme,
+  deco: DecoState,
   opts: DecoOpts,
 ): void {
   if (!tree) return
+  const { th, matchSet, selSet, nameColor } = deco
   const lineHeight = 13
   // Draw every Nth label when leaves are packed tighter than the line height.
   const stride = opts.dendro && opts.leafSpacing < lineHeight ? Math.ceil(lineHeight / Math.max(1, opts.leafSpacing)) : 1
@@ -325,11 +480,21 @@ function drawDecorations(
     const n = ln.node
     if (n.children.length === 0) {
       leafIdx++
+      const name = n.name ?? ''
+      const dotX = p.x + (opts.dendro ? 5 : 0)
+      // selection ring for distance measurement
+      if (selSet.has(n.id)) {
+        ctx.beginPath()
+        ctx.arc(dotX, p.y, 6, 0, 2 * Math.PI)
+        ctx.strokeStyle = th.accent
+        ctx.lineWidth = 2
+        ctx.stroke()
+      }
       // leaf color dot (ringed with the panel color for contrast)
-      const color = model.colorBy === 'cluster' ? nameColor.get(n.name ?? '') : undefined
+      const color = model.colorBy === 'cluster' ? nameColor.get(name) : undefined
       if (color) {
         ctx.beginPath()
-        ctx.arc(p.x + (opts.dendro ? 5 : 0), p.y, 3.5, 0, 2 * Math.PI)
+        ctx.arc(dotX, p.y, 3.5, 0, 2 * Math.PI)
         ctx.fillStyle = color
         ctx.fill()
         ctx.lineWidth = 1
@@ -337,8 +502,10 @@ function drawDecorations(
         ctx.stroke()
       }
       if (stride > 1 && leafIdx % stride !== 0) continue
-      ctx.fillStyle = th.text
-      const label = truncate(ctx, n.name ?? '', opts.maxLabelW)
+      const matched = matchSet ? matchSet.has(name.toLowerCase()) : null
+      ctx.fillStyle = matched === true ? th.accent : matchSet && !matched ? th.muted : th.text
+      ctx.font = matched === true ? `bold 12px ${th.font}` : `12px ${th.font}`
+      const label = truncate(ctx, name, opts.maxLabelW)
       if (opts.dendro) {
         ctx.textAlign = 'left'
         ctx.fillText(label, p.x + 11, p.y)
@@ -359,17 +526,85 @@ function drawDecorations(
       ctx.stroke()
     }
   }
-  // restore edge stroke defaults for any subsequent drawing
+  // restore edge stroke / font defaults for any subsequent drawing
   ctx.lineWidth = 1.5
   ctx.strokeStyle = th.edge
+  ctx.font = `12px ${th.font}`
   ctx.textAlign = 'left'
+}
+
+/** A distance scale bar in the bottom-left corner of a phylogram. */
+function drawScaleBar(ctx: CanvasRenderingContext2D, W: number, H: number, plotW: number, maxDepth: number, th: TreeTheme): void {
+  const pxPerDist = plotW / maxDepth
+  if (!isFinite(pxPerDist) || pxPerDist <= 0) return
+  const unit = niceNum(90 / pxPerDist)
+  const barPx = unit * pxPerDist
+  if (barPx < 8 || barPx > W - 24) return
+  const x0 = 16
+  const y0 = H - 16
+  ctx.save()
+  // panel-colored backing so the bar stays legible over any leaf beneath it
+  ctx.fillStyle = th.panel
+  ctx.globalAlpha = 0.85
+  ctx.fillRect(x0 - 6, y0 - 22, barPx + 12, 30)
+  ctx.globalAlpha = 1
+  ctx.strokeStyle = th.muted
+  ctx.fillStyle = th.muted
+  ctx.lineWidth = 1.5
+  ctx.beginPath()
+  ctx.moveTo(x0, y0)
+  ctx.lineTo(x0 + barPx, y0)
+  ctx.moveTo(x0, y0 - 3)
+  ctx.lineTo(x0, y0 + 3)
+  ctx.moveTo(x0 + barPx, y0 - 3)
+  ctx.lineTo(x0 + barPx, y0 + 3)
+  ctx.stroke()
+  ctx.font = `11px ${th.font}`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'bottom'
+  ctx.fillText(fmtNum(unit), x0 + barPx / 2, y0 - 4)
+  ctx.restore()
+}
+
+/** Round `x` down to a 1/2/5 × 10ⁿ "nice" number for axis ticks. */
+function niceNum(x: number): number {
+  if (x <= 0) return 1
+  const exp = Math.floor(Math.log10(x))
+  const f = x / 10 ** exp
+  const nf = f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10
+  return nf * 10 ** exp
+}
+
+/** Compact numeric formatting (3 significant figures). */
+function fmtNum(x: number): string {
+  if (!isFinite(x)) return '—'
+  if (x === 0) return '0'
+  return String(+x.toPrecision(3))
+}
+
+/** Tooltip text lines for a hovered node. */
+function tipLines(info: NodeInfo): string[] {
+  const lines = [info.isLeaf ? info.name || '(tip)' : `Clade · ${info.leafCount} tips`]
+  lines.push(`branch ${fmtNum(info.length)}`)
+  lines.push(`depth ${fmtNum(info.depth)}`)
+  if (info.support !== undefined) lines.push(`support ${Math.round(info.support * 100)}%`)
+  return lines
+}
+
+function downloadBlob(blob: Blob, name: string): void {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 /** Recompute node canvas positions and return the id of the node nearest (mx,my). */
 function hitTest(canvas: HTMLCanvasElement, model: TreeModel, mx: number, my: number): number | null {
   const tree = model.current()
   if (!tree) return null
-  const layout = layoutTree(tree)
+  const layout = layoutTree(tree, { cladogram: !model.branchLengths })
   const dpr = window.devicePixelRatio || 1
   const W = canvas.width / dpr
   const H = canvas.height / dpr

@@ -52,7 +52,16 @@ const RADIAL_GAP = Math.PI * 0.12
  * cladogram — rather than branch length, which would collapse short branches
  * into the centre.
  */
-export function layoutTree(tree: PhyloTree): TreeLayout {
+export interface LayoutOptions {
+  /**
+   * When true the dendrogram `x` is the topological level (tips aligned at
+   * x = 1) instead of cumulative branch length — a cladogram rather than a
+   * phylogram. Radial coords are unaffected (always a cladogram).
+   */
+  cladogram?: boolean
+}
+
+export function layoutTree(tree: PhyloTree, opts: LayoutOptions = {}): TreeLayout {
   const leaves = leafNodes(tree.root)
   const leafCount = Math.max(1, leaves.length)
   const depth = cumulativeDepths(tree.root)
@@ -89,7 +98,9 @@ export function layoutTree(tree: PhyloTree): TreeLayout {
     const angle = toAngle(y)
     // Radial: tips on the outer ring (radius 1), internal nodes by level.
     const radius = n.children.length === 0 ? 1 : maxLevel > 0 ? d / maxLevel : 0
-    nodes.set(n.id, { node: n, x: nodeDepth * scale, y, angle, radius, depth: d })
+    // Dendrogram x: branch length (phylogram) or level with tips at 1 (cladogram).
+    const x = opts.cladogram ? (n.children.length === 0 ? 1 : maxLevel > 0 ? d / maxLevel : 0) : nodeDepth * scale
+    nodes.set(n.id, { node: n, x, y, angle, radius, depth: d })
     return y
   }
   place(tree.root, 0)
