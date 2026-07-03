@@ -25,8 +25,12 @@ snapshot-driven exploration of an alignment's informational content, in the brow
   surface so the alignment renderer stays untouched.
 - **Conservation analysis** — per-column scores computed off the main thread in a Web
   Worker: **Shannon**, **Jensen-Shannon** (vs BLOSUM62 background), **Mean-Distances**
-  (ClustalX), **Vector Norm**, **BILD**, **Liu**, **Threshold**, and a **Multi** consensus,
-  drawn as a column-aligned scores track below the alignment (global track; per-group is next)
+  (ClustalX), **Vector Norm**, **BILD**, **Liu**, **Threshold**, and a **Multi** consensus.
+  The scores panel switches between two views: a **Tracks** (Jalview-style) view that stacks
+  each selected method as its own labeled histogram row (with per-group lines overlaid), and a
+  **Clusters** (Cluspack-style) view that clusters each column by its score into
+  **well- / moderately- / poorly-conserved** classes and paints the alignment as colored
+  conservation bands, with a per-class column tally
 - **Clustering & groups** — group sequences by identity / length / hydrophobicity / pI /
   composition using **hierarchic (Secator)**, **k-means**, **density-peaks (DPC)**, or
   **Gaussian mixture + AIC/BIC** (auto-selecting the number of groups); groups reorder the

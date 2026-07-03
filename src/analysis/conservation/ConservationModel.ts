@@ -7,10 +7,14 @@
 import type { EditorController } from '../../editor/EditorController'
 import { NumericsClient } from '../../workers/rpc'
 import type { SerializableModule } from '../../project/types'
-import type { ConservationMethodId, ScoreTrack } from './types'
+import type { ConservationMethodId, ConservationViewMode, ScoreTrack } from './types'
 
 interface ConservationSlice {
   shown: ConservationMethodId[]
+  /** Panel presentation: overlaid tracks vs. Cluspack conservation clustering. */
+  mode?: ConservationViewMode
+  /** Which method the cluster view groups columns by. */
+  clusterMethod?: ConservationMethodId
 }
 
 export class ConservationModel implements SerializableModule<ConservationSlice> {
@@ -24,6 +28,8 @@ export class ConservationModel implements SerializableModule<ConservationSlice> 
   private recomputeTimer = 0
   private computing = new Set<ConservationMethodId>()
   private groupProvider: (() => { id: number; rows: number[] }[]) | null = null
+  private mode: ConservationViewMode = 'tracks'
+  private clusterMethod: ConservationMethodId = 'multi'
 
   /** Supply the current per-group row subsets so tracks include per-group lines. */
   setGroupProvider(fn: (() => { id: number; rows: number[] }[]) | null): void {
@@ -72,8 +78,30 @@ export class ConservationModel implements SerializableModule<ConservationSlice> 
   isComputing(m: ConservationMethodId): boolean {
     return this.computing.has(m)
   }
+  mode_(): ConservationViewMode {
+    return this.mode
+  }
+  clusterMethod_(): ConservationMethodId {
+    return this.clusterMethod
+  }
 
   // ---- commands -----------------------------------------------------------
+
+  /** Switch between the overlaid-tracks view and the conservation-cluster view. */
+  async setMode(mode: ConservationViewMode): Promise<void> {
+    if (this.mode === mode) return
+    this.mode = mode
+    this.emit()
+    if (mode === 'cluster') await this.ensure(this.clusterMethod)
+  }
+
+  /** Choose which method drives the cluster view; computes it if needed. */
+  async setClusterMethod(m: ConservationMethodId): Promise<void> {
+    if (this.clusterMethod === m) return
+    this.clusterMethod = m
+    this.emit()
+    if (this.mode === 'cluster') await this.ensure(m)
+  }
 
   /** Toggle a method on/off in the scores panel, computing it if needed. */
   async toggle(m: ConservationMethodId): Promise<void> {
@@ -118,8 +146,9 @@ export class ConservationModel implements SerializableModule<ConservationSlice> 
     this.recomputeTimer = window.setTimeout(() => this.recomputeNow(), 250)
   }
   private async recomputeNow(): Promise<void> {
-    const methods = [...this.shown]
-    await Promise.all(methods.map((m) => this.ensure(m)))
+    const methods = new Set(this.shown)
+    if (this.mode === 'cluster') methods.add(this.clusterMethod)
+    await Promise.all([...methods].map((m) => this.ensure(m)))
   }
 
   /** Row-major flatten of the live alignment for transfer to the worker. */
@@ -138,11 +167,13 @@ export class ConservationModel implements SerializableModule<ConservationSlice> 
   // ---- SerializableModule -------------------------------------------------
 
   serialize(): ConservationSlice {
-    return { shown: [...this.shown] }
+    return { shown: [...this.shown], mode: this.mode, clusterMethod: this.clusterMethod }
   }
   hydrate(state: ConservationSlice | undefined): void {
     this.tracks.clear()
     this.shown = new Set(state?.shown ?? [])
+    this.mode = state?.mode ?? 'tracks'
+    this.clusterMethod = state?.clusterMethod ?? 'multi'
     this.lastContentVersion = this.ctrl.getColumnsVersion()
     this.emit()
     // Recompute the restored methods against the freshly-loaded alignment.
