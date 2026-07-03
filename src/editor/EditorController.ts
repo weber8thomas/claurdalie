@@ -33,6 +33,7 @@ export interface EditorSnapshot {
   cursorResidue: string | null
   cursorResidueIndex: number | null // 1-based ungapped position, null on gap
   selection: Selection | null
+  selectedRows: number
   schemeId: string
   dark: boolean
   cursorMode: boolean
@@ -137,6 +138,7 @@ export class EditorController {
       cursorResidue: residue,
       cursorResidueIndex: residueIndex,
       selection: this.renderer.selection,
+      selectedRows: this.renderer.selectedRowIds.size,
       schemeId: this.schemeId,
       dark: this.dark,
       cursorMode: this.cursorMode,
@@ -334,8 +336,73 @@ export class EditorController {
   }
   setSelection(sel: Selection | null): void {
     this.renderer.selection = sel
+    // The rows a rectangle selection spans become the selected sequences, so a
+    // subsequent name-drag moves them as a block.
+    const ids = this.renderer.selectedRowIds
+    ids.clear()
+    if (sel) {
+      const r0 = Math.min(sel.r0, sel.r1)
+      const r1 = Math.max(sel.r0, sel.r1)
+      for (let v = r0; v <= r1; v++) ids.add(this.store.rowIdAt(v))
+    }
     this.renderer.markDirty()
     this.bump()
+  }
+
+  // ---- sequence (row) selection: contiguous or not -----------------------
+
+  private rowAnchor: number | null = null
+  isRowSelected(v: number): boolean {
+    return this.renderer.selectedRowIds.has(this.store.rowIdAt(v))
+  }
+  selectedRowCount(): number {
+    return this.renderer.selectedRowIds.size
+  }
+  selectRowSingle(v: number): void {
+    this.renderer.selection = null
+    const ids = this.renderer.selectedRowIds
+    ids.clear()
+    ids.add(this.store.rowIdAt(v))
+    this.rowAnchor = v
+    this.renderer.markDirty()
+    this.bump()
+  }
+  toggleRowSelect(v: number): void {
+    this.renderer.selection = null
+    const ids = this.renderer.selectedRowIds
+    const id = this.store.rowIdAt(v)
+    if (ids.has(id)) ids.delete(id)
+    else ids.add(id)
+    this.rowAnchor = v
+    this.renderer.markDirty()
+    this.bump()
+  }
+  selectRowRange(v: number): void {
+    this.renderer.selection = null
+    const a = this.rowAnchor ?? v
+    const lo = Math.min(a, v)
+    const hi = Math.max(a, v)
+    const ids = this.renderer.selectedRowIds
+    ids.clear()
+    for (let i = lo; i <= hi; i++) ids.add(this.store.rowIdAt(i))
+    this.renderer.markDirty()
+    this.bump()
+  }
+
+  /** Move all selected sequences (contiguous or not) to `to`, packed, kept selected. */
+  moveSelectedRows(to: number): void {
+    const sel = this.renderer.selectedRowIds
+    if (!sel.size) return
+    const order = this.store.orderSnapshot()
+    const selIds = order.filter((id) => sel.has(id)) // relative order preserved
+    const remaining = order.filter((id) => !sel.has(id))
+    let insertAt = 0
+    for (let i = 0; i < to && i < order.length; i++) if (!sel.has(order[i])) insertAt++
+    const next = [...remaining.slice(0, insertAt), ...selIds, ...remaining.slice(insertAt)]
+    if (next.every((id, i) => id === order[i])) return // no-op
+    this.renderer.selection = null
+    this.undo.do(new ReorderBlockCommand(order, next))
+    this.ensureRowVisibleRange(insertAt, insertAt + selIds.length - 1)
   }
   setHover(h: CellPos | null): void {
     this.renderer.hover = h
@@ -478,6 +545,9 @@ export class EditorController {
     const col = this.renderer.cursor?.col ?? 0
     this.renderer.cursor = { row: v, col: clampInt(col, 0, Math.max(0, this.store.width - 1)) }
     this.renderer.selection = { r0: v, c0: 0, r1: v, c1: Math.max(0, this.store.width - 1) }
+    const ids = this.renderer.selectedRowIds
+    ids.clear()
+    ids.add(this.store.rowIdAt(v))
     this.selectionAnchor = null
     this.ensureRowVisible(v)
     this.renderer.markDirty()

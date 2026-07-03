@@ -76,6 +76,8 @@ export class GridRenderer {
   gutterHoverRow: number | null = null
   dropIndex: number | null = null
   editMode = false
+  /** Selected sequence rows (by stable id) for reordering — may be non-contiguous. */
+  selectedRowIds = new Set<number>()
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -518,6 +520,28 @@ export class GridRenderer {
     ctx.rect(GUTTER_W, RULER_H, this.gridWidthPx, this.gridHeightPx)
     ctx.clip()
 
+    // Selected sequence rows (may be non-contiguous) — full-width band.
+    if (this.selectedRowIds.size) {
+      const vis = computeVisible({
+        scrollX: this.scrollX,
+        scrollY: this.scrollY,
+        cellW: this.cellW,
+        cellH: this.cellH,
+        gridWidthPx: this.gridWidthPx,
+        gridHeightPx: this.gridHeightPx,
+        rows: this.store.height,
+        cols: this.store.width,
+      })
+      ctx.fillStyle = toCss(this.theme.selection)
+      ctx.globalAlpha = 0.12
+      for (let v = vis.firstRow; v < vis.lastRow; v++) {
+        if (this.selectedRowIds.has(this.store.rowIdAt(v))) {
+          ctx.fillRect(GUTTER_W, this.cellY(v), this.gridWidthPx, this.cellH)
+        }
+      }
+      ctx.globalAlpha = 1
+    }
+
     // Hover crosshair.
     if (this.hover) {
       ctx.fillStyle = toCss(this.theme.hover)
@@ -583,9 +607,9 @@ export class GridRenderer {
       const nameX = showGrip ? 26 : 8
       for (let v = vis.firstRow; v < vis.lastRow; v++) {
         const y = this.cellY(v)
-        if (sel && v >= sel.r0 && v <= sel.r1) {
+        if (this.selectedRowIds.has(this.store.rowIdAt(v))) {
           ctx.fillStyle = toCss(t.selection)
-          ctx.globalAlpha = 0.14
+          ctx.globalAlpha = 0.2
           ctx.fillRect(0, y, GUTTER_W, this.cellH)
           ctx.globalAlpha = 1
         }

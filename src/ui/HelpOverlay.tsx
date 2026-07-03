@@ -24,7 +24,12 @@ export function HelpOverlay({ onClose }: { onClose: () => void }) {
         </div>
         <p className="hint" style={{ marginTop: 20 }}>
           Tip: turn on <strong>Edit mode</strong> (F2), then use Space / Delete and ⌘/Ctrl+← →
-          to insert, remove and slide gaps. Shift-drag a residue to slide it; drag a name to reorder.
+          to insert, remove and slide gaps. Shift-drag a residue to slide it.
+        </p>
+        <p className="hint">
+          Select sequences by clicking their names — <strong>⌘/Ctrl-click</strong> to add others
+          (even non-adjacent), <strong>Shift-click</strong> for a range — then drag any selected name
+          (in Edit mode) to move them all together.
         </p>
         <div style={{ marginTop: 16, textAlign: 'right' }}>
           <button className="primary" onClick={onClose}>

@@ -4,9 +4,11 @@ import { useEditorSnapshot } from './useEditor'
 export function StatusBar({ ctrl }: { ctrl: EditorController }) {
   const s = useEditorSnapshot(ctrl)
   const sel = s.selection
-  const selInfo =
-    sel &&
-    `${Math.abs(sel.r1 - sel.r0) + 1}×${Math.abs(sel.c1 - sel.c0) + 1} selected`
+  const selInfo = sel
+    ? `${Math.abs(sel.r1 - sel.r0) + 1}×${Math.abs(sel.c1 - sel.c0) + 1} selected`
+    : s.selectedRows > 0
+      ? `${s.selectedRows} seq${s.selectedRows > 1 ? 's' : ''} selected`
+      : null
 
   return (
     <div className="statusbar">

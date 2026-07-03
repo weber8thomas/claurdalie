@@ -29,7 +29,7 @@ export function attachInteraction(
     | { kind: 'none' }
     | { kind: 'select'; anchor: { row: number; col: number } }
     | { kind: 'shift'; ids: number[]; startCol: number; applied: number; key: string }
-    | { kind: 'reorder'; from: number; lo: number; hi: number }
+    | { kind: 'reorder'; from: number; moved: boolean }
     | { kind: 'scroll'; bar: ScrollbarHit; grab: number }
   let drag: Drag = { kind: 'none' }
   let lastHoverKey: string | null = null
@@ -68,17 +68,15 @@ export function attachInteraction(
     const hit = r.hitTest(x, y)
 
     if (hit.region === 'gutter') {
-      // Reordering (moving sequences vertically) is an edit — edit mode only.
-      if (ctrl.cursorMode && hit.row >= 0 && hit.row < ctrl.store.height) {
-        // If the grabbed row is inside a selection, move the whole block.
-        const sel = r.selection ? norm(r.selection) : null
-        const inSel = sel && hit.row >= sel.r0 && hit.row <= sel.r1
-        drag = {
-          kind: 'reorder',
-          from: hit.row,
-          lo: inSel ? sel.r0 : hit.row,
-          hi: inSel ? sel.r1 : hit.row,
-        }
+      if (hit.row < 0 || hit.row >= ctrl.store.height) return
+      // Selecting sequences works in any mode: plain = single, ⌘/Ctrl = toggle
+      // (non-contiguous), Shift = range.
+      if (e.metaKey || e.ctrlKey) ctrl.toggleRowSelect(hit.row)
+      else if (e.shiftKey) ctrl.selectRowRange(hit.row)
+      else if (!ctrl.isRowSelected(hit.row)) ctrl.selectRowSingle(hit.row)
+      // Moving the selected sequences is an edit — edit mode only.
+      if (ctrl.cursorMode && ctrl.isRowSelected(hit.row)) {
+        drag = { kind: 'reorder', from: hit.row, moved: false }
         r.dropIndex = hit.row
         canvas.style.cursor = 'grabbing'
         r.markDirty()
@@ -168,6 +166,7 @@ export function attachInteraction(
         drag.applied = want
       }
     } else if (drag.kind === 'reorder') {
+      drag.moved = true
       r.dropIndex = r.dropIndexAt(y)
       r.markDirty()
     }
@@ -178,8 +177,7 @@ export function attachInteraction(
       const to = r.dropIndex ?? drag.from
       r.dropIndex = null
       canvas.style.cursor = 'grab'
-      if (drag.lo === drag.hi) ctrl.reorder(drag.from, to)
-      else ctrl.moveRows(drag.lo, drag.hi, to)
+      if (drag.moved) ctrl.moveSelectedRows(to) // a plain click only selects
     }
     if (drag.kind === 'select' && e) {
       // A pure click (no movement) leaves just the cursor, no selection box.
