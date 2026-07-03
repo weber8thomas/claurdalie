@@ -29,7 +29,7 @@ export function attachInteraction(
     | { kind: 'none' }
     | { kind: 'select'; anchor: { row: number; col: number } }
     | { kind: 'shift'; ids: number[]; startCol: number; applied: number; key: string }
-    | { kind: 'reorder'; from: number }
+    | { kind: 'reorder'; from: number; lo: number; hi: number }
     | { kind: 'scroll'; bar: ScrollbarHit; grab: number }
   let drag: Drag = { kind: 'none' }
   let lastHoverKey: string | null = null
@@ -68,8 +68,17 @@ export function attachInteraction(
     const hit = r.hitTest(x, y)
 
     if (hit.region === 'gutter') {
-      if (hit.row >= 0 && hit.row < ctrl.store.height) {
-        drag = { kind: 'reorder', from: hit.row }
+      // Reordering (moving sequences vertically) is an edit — edit mode only.
+      if (ctrl.cursorMode && hit.row >= 0 && hit.row < ctrl.store.height) {
+        // If the grabbed row is inside a selection, move the whole block.
+        const sel = r.selection ? norm(r.selection) : null
+        const inSel = sel && hit.row >= sel.r0 && hit.row <= sel.r1
+        drag = {
+          kind: 'reorder',
+          from: hit.row,
+          lo: inSel ? sel.r0 : hit.row,
+          hi: inSel ? sel.r1 : hit.row,
+        }
         r.dropIndex = hit.row
         canvas.style.cursor = 'grabbing'
         r.markDirty()
@@ -79,8 +88,9 @@ export function attachInteraction(
     if (hit.region !== 'grid') return
     if (hit.row < 0 || hit.row >= ctrl.store.height || hit.col < 0 || hit.col >= ctrl.store.width) return
 
-    if (e.shiftKey) {
+    if (e.shiftKey && ctrl.cursorMode) {
       // Shift-drag: slide gaps for the row (or selection if it covers the row).
+      // Horizontal moving is an edit — edit mode only.
       let ids: number[]
       const sel = r.selection ? norm(r.selection) : null
       if (sel && hit.row >= sel.r0 && hit.row <= sel.r1) {
@@ -108,11 +118,16 @@ export function attachInteraction(
     }
 
     if (drag.kind === 'none') {
-      // Gutter: highlight the row + grip, show grab cursor (draggable).
+      // Gutter: only draggable (grab + row grip) in edit mode.
       if (hit.region === 'gutter' && hit.row >= 0 && hit.row < ctrl.store.height) {
-        ctrl.setGutterHover(hit.row)
+        if (ctrl.cursorMode) {
+          ctrl.setGutterHover(hit.row)
+          canvas.style.cursor = 'grab'
+        } else {
+          ctrl.setGutterHover(null)
+          canvas.style.cursor = 'default'
+        }
         ctrl.setHover(null)
-        canvas.style.cursor = 'grab'
         clearHover()
         return
       }
@@ -163,7 +178,8 @@ export function attachInteraction(
       const to = r.dropIndex ?? drag.from
       r.dropIndex = null
       canvas.style.cursor = 'grab'
-      ctrl.reorder(drag.from, to)
+      if (drag.lo === drag.hi) ctrl.reorder(drag.from, to)
+      else ctrl.moveRows(drag.lo, drag.hi, to)
     }
     if (drag.kind === 'select' && e) {
       // A pure click (no movement) leaves just the cursor, no selection box.
@@ -237,10 +253,10 @@ export function attachInteraction(
       return
     }
 
-    // Sequence shift with Ctrl/Cmd + arrows
+    // Sequence shift with Ctrl/Cmd + arrows (edit mode only)
     if (mod && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-      e.preventDefault()
-      ctrl.shiftTargets(e.key === 'ArrowRight' ? 1 : -1)
+      e.preventDefault() // also stops browser history navigation
+      if (ctrl.cursorMode) ctrl.shiftTargets(e.key === 'ArrowRight' ? 1 : -1)
       return
     }
 

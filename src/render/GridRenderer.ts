@@ -75,6 +75,7 @@ export class GridRenderer {
   hover: CellPos | null = null
   gutterHoverRow: number | null = null
   dropIndex: number | null = null
+  editMode = false
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -574,7 +575,7 @@ export class GridRenderer {
     // Names use the SAME visibility threshold as residue glyphs, with a font
     // that scales down with the row height so both fade out together.
     const showNames = this.cellW >= TEXT_THRESHOLD && this.cellH >= TEXT_THRESHOLD
-    const showGrip = this.cellH >= 14
+    const showGrip = this.cellH >= 14 && this.editMode // grips only when rows are draggable
     if (showNames) {
       const fontPx = Math.max(8, Math.min(13, Math.round(this.cellH * 0.72)))
       ctx.textBaseline = 'middle'

@@ -54,21 +54,28 @@ export function ContextMenu({
     onClose()
   }
 
+  const canEdit = ctrl.cursorMode // editing (moving) is only allowed in edit mode
   const items: (Item | 'sep')[] = []
+  if (!canEdit) {
+    items.push(
+      { label: 'Enable Edit mode (F2) to modify', onClick: run(() => ctrl.toggleCursorMode()) },
+      'sep',
+    )
+  }
   if (inGrid) {
     const scope = targetIsSelection ? 'selection' : 'cell'
     items.push(
-      { label: `Insert gap (${scope})`, onClick: run(() => { focusTarget(); ctrl.insertGap() }) },
-      { label: `Delete gap (${scope})`, onClick: run(() => { focusTarget(); ctrl.deleteGap() }) },
+      { label: `Insert gap (${scope})`, disabled: !canEdit, onClick: run(() => { focusTarget(); ctrl.insertGap() }) },
+      { label: `Delete gap (${scope})`, disabled: !canEdit, onClick: run(() => { focusTarget(); ctrl.deleteGap() }) },
       'sep',
-      { label: 'Shift sequence left  ⌘←', onClick: run(() => { focusTarget(); ctrl.shiftTargets(-1) }) },
-      { label: 'Shift sequence right ⌘→', onClick: run(() => { focusTarget(); ctrl.shiftTargets(1) }) },
+      { label: 'Shift sequence left  ⌘←', disabled: !canEdit, onClick: run(() => { focusTarget(); ctrl.shiftTargets(-1) }) },
+      { label: 'Shift sequence right ⌘→', disabled: !canEdit, onClick: run(() => { focusTarget(); ctrl.shiftTargets(1) }) },
       'sep',
     )
   }
   items.push(
-    { label: 'Move sequence up', disabled: v <= 0, onClick: run(() => ctrl.moveRowBy(v, -1)) },
-    { label: 'Move sequence down', disabled: v >= ctrl.store.height - 1, onClick: run(() => ctrl.moveRowBy(v, 1)) },
+    { label: 'Move sequence up', disabled: !canEdit || v <= 0, onClick: run(() => ctrl.moveRowBy(v, -1)) },
+    { label: 'Move sequence down', disabled: !canEdit || v >= ctrl.store.height - 1, onClick: run(() => ctrl.moveRowBy(v, 1)) },
     'sep',
     { label: 'Copy sequence (FASTA)', onClick: run(() => void copy(ctrl.rowFasta(v), 'sequence')) },
   )
@@ -79,6 +86,7 @@ export function ContextMenu({
     'sep',
     {
       label: 'Remove gap-only columns',
+      disabled: !canEdit,
       onClick: run(() => {
         const n = ctrl.removeGapOnlyColumns()
         onToast(n ? `Removed ${n} gap-only column${n > 1 ? 's' : ''}` : 'No gap-only columns')

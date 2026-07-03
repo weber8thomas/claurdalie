@@ -7,6 +7,7 @@ import {
   DeleteGapCommand,
   InsertGapCommand,
   ReorderRowsCommand,
+  ReorderBlockCommand,
   ShiftSequenceCommand,
   deleteGapColumn,
   insertGapColumn,
@@ -220,6 +221,7 @@ export class EditorController {
   }
   toggleCursorMode(): void {
     this.cursorMode = !this.cursorMode
+    this.renderer.editMode = this.cursorMode
     if (this.cursorMode && !this.renderer.cursor) {
       this.renderer.cursor = { row: 0, col: 0 }
     }
@@ -323,11 +325,17 @@ export class EditorController {
     return { ids: [this.store.rowIdAt(cur.row)], col: cur.col }
   }
 
+  /** Gap columns to insert/delete per action: the selection width, else 1. */
+  private editCount(): number {
+    const s = this.renderer.selection
+    return s ? Math.abs(s.c1 - s.c0) + 1 : 1
+  }
   insertGap(): void {
     const t = this.targetRowIds()
     if (!t) return
     const hadSelection = !!this.renderer.selection
-    this.undo.do(t.ids.length > 1 ? insertGapColumn(t.ids, t.col, 1) : new InsertGapCommand(t.ids[0], t.col, 1))
+    const n = this.editCount()
+    this.undo.do(t.ids.length > 1 ? insertGapColumn(t.ids, t.col, n) : new InsertGapCommand(t.ids[0], t.col, n))
     // Single-cell typing advances the cursor; a selection is kept intact so you
     // can keep editing the same block (Space/Delete don't reset it).
     if (!hadSelection && this.renderer.cursor) {
@@ -337,7 +345,37 @@ export class EditorController {
   deleteGap(): void {
     const t = this.targetRowIds()
     if (!t) return
-    this.undo.do(t.ids.length > 1 ? deleteGapColumn(t.ids, t.col, 1) : new DeleteGapCommand(t.ids[0], t.col, 1))
+    const n = this.editCount()
+    this.undo.do(t.ids.length > 1 ? deleteGapColumn(t.ids, t.col, n) : new DeleteGapCommand(t.ids[0], t.col, n))
+  }
+
+  /**
+   * Move a contiguous block of visual rows [lo..hi] so it lands at `to`,
+   * keeping the block selected afterwards. One undo entry.
+   */
+  moveRows(lo: number, hi: number, to: number): void {
+    const before = this.store.orderSnapshot()
+    const ids = before.slice()
+    const block = ids.splice(lo, hi - lo + 1)
+    let insertAt = to > hi ? to - block.length : to
+    insertAt = clampInt(insertAt, 0, ids.length)
+    if (insertAt === lo) return // no-op
+    ids.splice(insertAt, 0, ...block)
+    this.undo.do(new ReorderBlockCommand(before, ids))
+    const sel = this.renderer.selection
+    const c0 = sel ? Math.min(sel.c0, sel.c1) : 0
+    const c1 = sel ? Math.max(sel.c0, sel.c1) : this.store.width - 1
+    this.setSelection({ r0: insertAt, c0, r1: insertAt + block.length - 1, c1 })
+    this.ensureRowVisibleRange(insertAt, insertAt + block.length - 1)
+  }
+  private ensureRowVisibleRange(lo: number, hi: number): void {
+    const r = this.renderer
+    const top = lo * r.cellH
+    const bot = (hi + 1) * r.cellH
+    let ny = r.scrollY
+    if (top < r.scrollY) ny = top
+    else if (bot > r.scrollY + r.gridHeightPx) ny = bot - r.gridHeightPx
+    r.setScroll(r.scrollX, ny)
   }
   /** Delete the gap immediately to the LEFT (backspace behavior). */
   deleteGapLeft(): void {

@@ -118,6 +118,22 @@ export class ReorderRowsCommand implements EditCommand {
   }
 }
 
+/** Reorder by replacing the whole visual order (for multi-row block moves). */
+export class ReorderBlockCommand implements EditCommand {
+  label = 'Move sequences'
+  constructor(
+    private before: number[],
+    private after: number[],
+  ) {}
+  apply(store: AlignmentStore): ChangeSet {
+    store.setOrder(this.after)
+    return { orderChanged: true }
+  }
+  invert(): EditCommand {
+    return new ReorderBlockCommand(this.after, this.before)
+  }
+}
+
 // ---- selection-scoped compound edits -----------------------------------
 
 /** Insert `count` gap columns at `col` across the given rows (one undo entry). */
