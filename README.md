@@ -39,9 +39,13 @@ snapshot-driven exploration of an alignment's informational content, in the brow
 - **Instances (snapshots)** — an always-visible combobox to juggle parallel analytical
   hypotheses; switching an instance restores the *exact* state of the alignment **and** every
   sub-module (shown scores, clustering/groups, tree, view, selection). Fork / overwrite / rename / delete
-- **Project persistence** — export/import the whole project (every snapshot + module state)
-  as a gzipped **`.clproj`** file (typed arrays stored as base64 + gap-RLE, no dependency);
-  the working project auto-saves to **IndexedDB** and is restored on reload
+- **Session persistence** — two export/import scopes, both as a gzipped **`.clproj`** file
+  (typed arrays stored as base64 + gap-RLE, no dependency): the **whole project** (every
+  snapshot + module state) or a **single instance** (its alignment + its metadata, imported as
+  a new instance into the current project). The alignment itself round-trips separately as
+  plain **FASTA**. The working project auto-saves to **IndexedDB** and is restored on reload.
+  A session is *alignment + metadata*; future **annotations** will ride the same per-snapshot
+  slices with no format change
 - **Re-alignment** — re-align the selected sequences behind a pluggable **`Aligner`**: **Kalign**
   compiled to WASM (biowasm/Aioli, dynamically imported, runs off-thread, no server) or the
   optional online **MAFFT via EMBL-EBI**. Re-align in place or **into a new snapshot** (the

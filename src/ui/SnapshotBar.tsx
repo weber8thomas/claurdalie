@@ -8,9 +8,11 @@ interface Props {
 
 /**
  * Ordalie's Snapshot Bar: a combobox to juggle between analytical instances,
- * plus New / Overwrite / Rename / Delete, and Export/Import of the whole project
- * as a .clproj file. Switching restores the exact state of the alignment and
- * every registered sub-module (see ProjectStore).
+ * plus New / Overwrite / Rename / Delete, and Session export/import as a .clproj
+ * file at two scopes — a single instance or the whole project. Switching (and
+ * importing) restores the exact state of the alignment and every registered
+ * sub-module (see ProjectStore). A "session" here is the alignment + its
+ * metadata; annotations will ride the same per-snapshot slices later.
  */
 export function SnapshotBar({ project, onToast }: Props) {
   const key = useSyncExternalStore(
@@ -20,27 +22,45 @@ export function SnapshotBar({ project, onToast }: Props) {
   const list = project.list()
   const active = list.find((i) => i.active)
   const fileRef = useRef<HTMLInputElement>(null)
+  // Which import scope the pending file dialog is for (see the file input below).
+  const importMode = useRef<'instance' | 'project'>('project')
 
-  const onExport = async () => {
+  const download = (bytes: Uint8Array, name: string) => {
+    const blob = new Blob([bytes as BlobPart], { type: 'application/gzip' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+  // Filesystem-safe filename from an instance name (fallback to a default).
+  const safeName = (s: string) => s.replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '') || 'instance'
+
+  const onExport = async (scope: 'instance' | 'project') => {
     try {
-      const bytes = await project.toFile()
-      const blob = new Blob([bytes as BlobPart], { type: 'application/gzip' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'project.clproj'
-      a.click()
-      URL.revokeObjectURL(url)
-      onToast?.('Exported project.clproj')
+      if (scope === 'instance') {
+        download(await project.toFileActive(), `${safeName(active?.name ?? 'instance')}.clproj`)
+        onToast?.(`Exported instance "${active?.name ?? ''}"`)
+      } else {
+        download(await project.toFile(), 'project.clproj')
+        onToast?.('Exported project.clproj')
+      }
     } catch {
       onToast?.('Export failed')
     }
   }
   const onImport = async (file: File) => {
+    const mode = importMode.current
     try {
       const bytes = new Uint8Array(await file.arrayBuffer())
-      await project.fromFile(bytes)
-      onToast?.(`Imported ${file.name}`)
+      if (mode === 'instance') {
+        await project.addInstancesFromFile(bytes)
+        onToast?.(`Imported ${file.name} as new instance`)
+      } else {
+        await project.fromFile(bytes)
+        onToast?.(`Imported ${file.name}`)
+      }
     } catch {
       onToast?.('Import failed — not a valid .clproj file')
     }
@@ -104,16 +124,37 @@ export function SnapshotBar({ project, onToast }: Props) {
       </button>
 
       <div className="snapshot-spacer" />
-      <button className="snapshot-btn" title="Export the whole project (.clproj)" onClick={() => void onExport()}>
-        Export
-      </button>
-      <button
-        className="snapshot-btn"
-        title="Import a project (.clproj)"
-        onClick={() => fileRef.current?.click()}
+      <span className="snapshot-label">Session</span>
+      <select
+        className="snapshot-select"
+        value=""
+        title="Export a session (.clproj) — this instance, or the whole project"
+        onChange={(e) => {
+          const scope = e.target.value as 'instance' | 'project'
+          e.target.value = ''
+          if (scope) void onExport(scope)
+        }}
       >
-        Import
-      </button>
+        <option value="">Export…</option>
+        <option value="instance">This instance</option>
+        <option value="project">Whole project</option>
+      </select>
+      <select
+        className="snapshot-select"
+        value=""
+        title="Import a session (.clproj) — add as a new instance, or replace the project"
+        onChange={(e) => {
+          const mode = e.target.value as 'instance' | 'project'
+          e.target.value = ''
+          if (!mode) return
+          importMode.current = mode
+          fileRef.current?.click()
+        }}
+      >
+        <option value="">Import…</option>
+        <option value="instance">As new instance</option>
+        <option value="project">Replace project</option>
+      </select>
       <input
         ref={fileRef}
         type="file"

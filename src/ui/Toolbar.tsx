@@ -119,10 +119,10 @@ export function Toolbar({
       </div>
 
       <div className="tb-group">
-        <button className="btn" onClick={() => fileRef.current?.click()} title="Import FASTA">
+        <button className="btn" onClick={() => fileRef.current?.click()} title="Import alignment (FASTA)">
           <Icon name="import" /> Import
         </button>
-        <button className="btn" onClick={onExport} title="Export FASTA">
+        <button className="btn" onClick={onExport} title="Export alignment (FASTA)">
           <Icon name="export" /> Export
         </button>
         <select
