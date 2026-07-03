@@ -19,6 +19,7 @@ interface Props {
 
 export function Minimap({ ctrl, width, height, onResize, onClose }: Props) {
   const snap = useEditorSnapshot(ctrl)
+  const contentVersion = ctrl.getContentVersion()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const offRef = useRef<HTMLCanvasElement | null>(null)
   const W = width
@@ -67,7 +68,7 @@ export function Minimap({ ctrl, width, height, onResize, onClose }: Props) {
     offRef.current = off
     draw()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snap.rows, snap.cols, snap.schemeId, snap.dark, W, H])
+  }, [snap.rows, snap.cols, snap.schemeId, snap.dark, W, H, contentVersion])
 
   const draw = () => {
     const canvas = canvasRef.current

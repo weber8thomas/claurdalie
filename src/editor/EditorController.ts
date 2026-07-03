@@ -60,18 +60,25 @@ export class EditorController {
     this.renderer.scheme = this.scheme()
     this.renderer.theme = this.dark ? DARK_CANVAS : LIGHT_CANVAS
 
-    // Model events drive cache invalidation + repaint.
+    // Model events drive cache invalidation + repaint (and bump contentVersion
+    // so views derived from the data — e.g. the minimap heatmap — refresh).
     this.store.on('rowsChanged', (c) => {
       if (c.columns) this.stats.invalidate(c.columns[0], c.columns[1] + 1)
+      this.contentVersion++
       this.renderer.markDirty()
     })
-    this.store.on('layoutChanged', () => this.renderer.markDirty())
+    this.store.on('layoutChanged', () => {
+      this.contentVersion++
+      this.renderer.markDirty()
+    })
     this.store.on('orderChanged', () => {
       this.stats.clear()
+      this.contentVersion++
       this.renderer.markDirty()
     })
     this.store.on('reset', () => {
       this.stats.clear()
+      this.contentVersion++
       this.renderer.setScroll(0, 0)
       this.renderer.markDirty()
     })
@@ -89,6 +96,9 @@ export class EditorController {
     return () => this.listeners.delete(fn)
   }
   getVersion = (): number => this.version
+  /** Bumps whenever the alignment DATA changes (edits, reorder, load). */
+  getContentVersion = (): number => this.contentVersion
+  private contentVersion = 0
   /** Public trigger for imperative actions (e.g. wheel zoom) to refresh chrome. */
   snapshotBump = (): void => this.bump()
   private bump(): void {
