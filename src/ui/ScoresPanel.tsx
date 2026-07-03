@@ -7,12 +7,14 @@ import {
   METHOD_COLORS,
   LIGHT_TRACK,
   DARK_TRACK,
-  type TrackInput,
+  TRACK_ROW_H,
+  type TrackRow,
 } from '../render/ScoreTrackRenderer'
 import type { GroupModel } from '../analysis/cluster/GroupModel'
 import { useEditorSnapshot } from './useEditor'
 
-const PANEL_H = 104
+/** Height of the cluster view and the empty/computing state. */
+const CLUSTER_H = 104
 
 interface Props {
   ctrl: EditorController
@@ -60,50 +62,36 @@ export function ScoresPanel({ ctrl, model, group, onClose }: Props) {
 
     const paint = () => {
       const rect = wrap.getBoundingClientRect()
-      r.resize(rect.width, PANEL_H)
       const theme = snap.dark ? DARK_TRACK : LIGHT_TRACK
-
-      // Cluster view: a single method, columns painted by conservation class.
-      if (model.mode_() === 'cluster') {
-        const method = model.clusterMethod_()
-        r.drawClusters({
-          cellW: ctrl.renderer.cellW,
-          scrollX: ctrl.renderer.scrollX,
-          gridWidthPx: ctrl.renderer.gridWidthPx,
-          colCount: ctrl.store.width,
-          theme,
-          dark: snap.dark,
-          method,
-          track: model.track(method),
-        })
-        return
-      }
-
-      const shown = model.shownMethods()
-      const axis = snap.dark ? '#e8e8ea' : '#1a1a1e'
-      const groupColor = (id: number) => group?.clusterInfos().find((c) => c.id === id)?.color ?? METHOD_COLORS.multi
-      const tracks: TrackInput[] = []
-      for (const m of shown) {
-        const t = model.track(m)
-        if (!t) continue
-        const hasGroups = (t.groupScores?.length ?? 0) > 0
-        // With groups, the global line is the neutral axis color and each group
-        // gets its cluster color; without groups, the method's own color.
-        tracks.push({ method: m, track: t, color: hasGroups ? axis : METHOD_COLORS[m], emphasis: true })
-        if (t.groupScores) {
-          for (const gs of t.groupScores) {
-            tracks.push({ method: m, track: { method: m, scores: gs.scores }, color: groupColor(gs.id), emphasis: false })
-          }
-        }
-      }
-      r.draw({
+      const geom = {
         cellW: ctrl.renderer.cellW,
         scrollX: ctrl.renderer.scrollX,
         gridWidthPx: ctrl.renderer.gridWidthPx,
         colCount: ctrl.store.width,
         theme,
-        tracks,
-      })
+      }
+
+      // Cluster view: a single method, columns painted by conservation class.
+      if (model.mode_() === 'cluster') {
+        r.resize(rect.width, CLUSTER_H)
+        const method = model.clusterMethod_()
+        r.drawClusters({ ...geom, dark: snap.dark, method, track: model.track(method) })
+        return
+      }
+
+      // Tracks view: one stacked row per shown method (Jalview annotation stack).
+      const groupColor = (id: number) => group?.clusterInfos().find((c) => c.id === id)?.color ?? METHOD_COLORS.multi
+      const shown = model.shownMethods()
+      const rows: TrackRow[] = []
+      for (const m of shown) {
+        const t = model.track(m)
+        if (!t) continue
+        const groups = t.groupScores?.map((gs) => ({ color: groupColor(gs.id), scores: gs.scores }))
+        rows.push({ method: m, scores: t.scores, color: METHOD_COLORS[m], groups })
+      }
+      // Height grows with the number of rows; keep one row's worth when empty.
+      r.resize(rect.width, Math.max(1, rows.length) * TRACK_ROW_H)
+      r.draw({ ...geom, rows })
     }
 
     paint()

@@ -26,8 +26,8 @@ snapshot-driven exploration of an alignment's informational content, in the brow
 - **Conservation analysis** — per-column scores computed off the main thread in a Web
   Worker: **Shannon**, **Jensen-Shannon** (vs BLOSUM62 background), **Mean-Distances**
   (ClustalX), **Vector Norm**, **BILD**, **Liu**, **Threshold**, and a **Multi** consensus.
-  The scores panel switches between two views: a **Tracks** (Jalview-style) view that overlays
-  any subset of methods as column-aligned line/bar tracks (global + per-group), and a
+  The scores panel switches between two views: a **Tracks** (Jalview-style) view that stacks
+  each selected method as its own labeled histogram row (with per-group lines overlaid), and a
   **Clusters** (Cluspack-style) view that clusters each column by its score into
   **well- / moderately- / poorly-conserved** classes and paints the alignment as colored
   conservation bands, with a per-class column tally
