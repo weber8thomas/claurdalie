@@ -74,16 +74,22 @@ export class EditorController {
     this.store.on('rowsChanged', (c) => {
       if (c.columns) this.stats.invalidate(c.columns[0], c.columns[1] + 1)
       this.contentVersion++
+      this.columnsVersion++
       this.schedulePersist()
       this.renderer.markDirty()
     })
     this.store.on('layoutChanged', () => {
       this.contentVersion++
+      this.columnsVersion++
       this.schedulePersist()
       this.renderer.markDirty()
     })
+    // A reorder is a pure row permutation: column composition — and therefore
+    // every column's stats and conservation — is unchanged. So we must NOT clear
+    // the stats cache or bump columnsVersion; doing either forced a full recolor
+    // + conservation reflatten on every drag-drop release. Only the visual order
+    // changed, which the minimap + persistence track via contentVersion.
     this.store.on('orderChanged', () => {
-      this.stats.clear()
       this.contentVersion++
       this.schedulePersist()
       this.renderer.markDirty()
@@ -91,6 +97,7 @@ export class EditorController {
     this.store.on('reset', () => {
       this.stats.clear()
       this.contentVersion++
+      this.columnsVersion++
       this.schedulePersist()
       this.renderer.setScroll(0, 0)
       this.renderer.markDirty()
@@ -112,6 +119,13 @@ export class EditorController {
   /** Bumps whenever the alignment DATA changes (edits, reorder, load). */
   getContentVersion = (): number => this.contentVersion
   private contentVersion = 0
+  /**
+   * Bumps only when column COMPOSITION changes (gap edits, layout, load) — NOT
+   * on a row reorder. Column-derived analyses (conservation) key off this so a
+   * pure permutation never triggers a needless reflatten + recompute.
+   */
+  getColumnsVersion = (): number => this.columnsVersion
+  private columnsVersion = 0
   private datasetFallbackKind = 'demo'
   private persistTimer = 0
   /** Public trigger for imperative actions (e.g. wheel zoom) to refresh chrome. */

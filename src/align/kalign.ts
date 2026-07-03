@@ -22,7 +22,18 @@ interface AioliCLI {
   cat(path: string): Promise<string>
 }
 type AioliCtor = { new (tool: string): Promise<AioliCLI> }
-type AioliLoader = () => Promise<{ default: AioliCtor }>
+/** The CDN module may expose the constructor as default, named, or itself. */
+type AioliModule = { default?: unknown; Aioli?: unknown } | unknown
+type AioliLoader = () => Promise<AioliModule>
+
+/** biowasm tool spec — `<tool>/<version>`; overridable if the version drifts. */
+const KALIGN_TOOL = 'kalign/3.3.1'
+
+/** Short, single-line reason from an unknown thrown value (for panel + logs). */
+function reason(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e)
+  return msg.replace(/\s+/g, ' ').slice(0, 160)
+}
 
 export class AioliKalignAligner implements Aligner {
   readonly id = 'kalign'
@@ -33,21 +44,37 @@ export class AioliKalignAligner implements Aligner {
 
   private cli: Promise<AioliCLI> | null = null
 
-  constructor(private readonly loader: AioliLoader = () => import(/* @vite-ignore */ AIOLI_CDN)) {}
+  constructor(
+    private readonly loader: AioliLoader = () => import(/* @vite-ignore */ AIOLI_CDN),
+    private readonly tool: string = KALIGN_TOOL,
+  ) {}
 
   private getCLI(): Promise<AioliCLI> {
     if (this.cli) return this.cli
     this.cli = (async () => {
-      let Aioli: AioliCtor
+      // 1. Load the Aioli module from the CDN.
+      let mod: AioliModule
       try {
-        Aioli = (await this.loader()).default
-      } catch {
-        throw new AlignError('unavailable', 'Could not load the Kalign module (CDN blocked or offline)')
+        mod = await this.loader()
+      } catch (e) {
+        console.error('[kalign] failed to load Aioli from', AIOLI_CDN, e)
+        throw new AlignError('unavailable', `Could not load the Kalign module — ${reason(e)}`)
       }
+      // 2. Resolve the constructor (default / named / the module itself).
+      const m = mod as { default?: unknown; Aioli?: unknown }
+      const ctor = (m?.default ?? m?.Aioli ?? mod) as AioliCtor
+      if (typeof ctor !== 'function') {
+        console.error('[kalign] Aioli module has no constructor export', mod)
+        throw new AlignError('unavailable', 'Kalign module loaded but exposed no Aioli constructor')
+      }
+      // 3. Initialize the WASM tool (fetches the tool config + wasm from the CDN).
       try {
-        return await new Aioli('kalign/3.3.1')
-      } catch {
-        throw new AlignError('unavailable', 'Kalign WASM failed to initialize')
+        return await new ctor(this.tool)
+      } catch (e) {
+        // The real cause (e.g. a 404 for the tool version, or a worker error) is
+        // logged here AND folded into the message so it shows in the panel.
+        console.error('[kalign] Aioli failed to initialize', this.tool, e)
+        throw new AlignError('unavailable', `Kalign WASM failed to initialize — ${reason(e)}`)
       }
     })()
     // Allow a later retry if initialization fails.
@@ -81,7 +108,8 @@ export class AioliKalignAligner implements Aligner {
     } catch (e) {
       if (e instanceof AlignError) throw e
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-      throw new AlignError('unavailable', 'Kalign run failed')
+      console.error('[kalign] run failed', e)
+      throw new AlignError('unavailable', `Kalign run failed — ${reason(e)}`)
     }
   }
 }

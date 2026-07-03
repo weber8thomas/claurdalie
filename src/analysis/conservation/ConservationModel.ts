@@ -36,10 +36,12 @@ export class ConservationModel implements SerializableModule<ConservationSlice> 
   }
 
   constructor(private ctrl: EditorController) {
-    this.lastContentVersion = ctrl.getContentVersion()
-    // When the alignment data changes, shown tracks go stale → debounce recompute.
+    // Key off columnsVersion (composition changes) NOT contentVersion: a row
+    // reorder can't change per-column or per-group conservation, so it must not
+    // trigger a reflatten + recompute — that was the drag-drop-release stall.
+    this.lastContentVersion = ctrl.getColumnsVersion()
     this.unsub = ctrl.subscribe(() => {
-      const v = ctrl.getContentVersion()
+      const v = ctrl.getColumnsVersion()
       if (v !== this.lastContentVersion) {
         this.lastContentVersion = v
         this.tracks.clear()
@@ -141,7 +143,7 @@ export class ConservationModel implements SerializableModule<ConservationSlice> 
   hydrate(state: ConservationSlice | undefined): void {
     this.tracks.clear()
     this.shown = new Set(state?.shown ?? [])
-    this.lastContentVersion = this.ctrl.getContentVersion()
+    this.lastContentVersion = this.ctrl.getColumnsVersion()
     this.emit()
     // Recompute the restored methods against the freshly-loaded alignment.
     void this.recomputeNow()

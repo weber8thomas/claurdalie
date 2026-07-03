@@ -128,17 +128,31 @@ export default function App() {
     // Auto-persist the working project to IndexedDB (debounced), and restore any
     // previously saved state on load. The seed above keeps the UI live while the
     // async restore runs; the `restoring` guard stops the restore from re-saving.
+    //
+    // Persistence must never make the editor feel slow, so we only save on real
+    // CONTENT/structure changes (edits, reorder, load, snapshot ops) — never on
+    // cursor moves, selection, or zoom — debounce generously, and skip very large
+    // alignments whose full serialize would jank the main thread (Export still
+    // works manually for those).
+    const AUTOSAVE_CELL_CAP = 400_000
     let restoring = true
     let saveTimer = 0
+    let lastContentVersion = ctrl.getContentVersion()
     const scheduleSave = () => {
       if (restoring) return
       window.clearTimeout(saveTimer)
       saveTimer = window.setTimeout(() => {
+        if (ctrl.store.height * ctrl.store.width > AUTOSAVE_CELL_CAP) return
         void proj.toFile().then(saveProject).catch(() => {})
-      }, 800)
+      }, 1500)
     }
     const offProjSave = proj.subscribe(scheduleSave)
-    const offCtrlSave = ctrl.subscribe(scheduleSave)
+    const offCtrlSave = ctrl.subscribe(() => {
+      const v = ctrl.getContentVersion()
+      if (v === lastContentVersion) return // cursor / selection / zoom — not persisted state
+      lastContentVersion = v
+      scheduleSave()
+    })
     void (async () => {
       try {
         const saved = await loadProject()
