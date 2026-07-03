@@ -1,54 +1,83 @@
-// Non-React hub for the structure feature: owns the reference row, fold state,
-// the fold cache, and the column↔residue map, and bridges the alignment editor
-// to whatever StructureViewer the panel has loaded. Mirrors the project's
-// "controller owns logic, React owns chrome" rule (cf. EditorController).
+// Non-React hub for the structure feature: owns the set of displayed models,
+// fold state, the fold cache, per-model column↔residue maps, color/representation
+// settings, and bridges the alignment editor to the loaded StructureViewer.
+// Mirrors the project's "controller owns logic, React owns chrome" rule.
 //
-// Performance discipline: this never touches the grid's render loop. Folding is
-// async + abortable + cached; content edits rebuild only the (cheap) map unless
-// the residues themselves changed (they don't, under gap-only editing), so gap
-// edits cost zero network.
+// Multiple structures can be shown at once (fold several sequences, or load a
+// known structure to compare) — each gets a distinct color. Folds are cached by
+// sequence content, so gap-only edits never re-fetch; each fold model keeps its
+// own column↔residue map (rebuilt on gap edits) so hover→3D and 3D-pick→cursor
+// stay correct per sequence. Never touches the grid's render loop.
 
 import type { EditorController } from '../editor/EditorController'
 import { toFoldInput } from './sanitize'
-import { FoldCache, hashSequence } from './cache'
+import { FoldCache } from './cache'
 import { ResidueColumnMap } from './mapping'
 import { structureFromFile } from './fileSource'
 import { EsmFoldSource } from './esmfold'
-import type { Structure, StructureSource } from './types'
+import { superpose, parseCaCoords, applyTransformToPdb } from './superpose'
+import type { Structure, StructureSource, FoldErrorKind } from './types'
 import { FoldError } from './types'
+import type { ColorMode, Representation, ViewerModel } from './viewer'
 
-export type FoldPhase = 'idle' | 'loading' | 'ready' | 'error'
+/** Distinct model colors (matches the app's brand palette, extended). */
+const MODEL_COLORS = ['#2bb3a3', '#f3a83c', '#5b7cf0', '#ef5d6c', '#8b5cf6', '#22c55e', '#eab308', '#ec4899']
+
+type ModelKind = 'fold' | 'file' | 'compare'
+
+interface StructureModel {
+  id: string
+  label: string
+  structure: Structure
+  color: string
+  kind: ModelKind
+  /** Alignment row this model was folded from (fold kind only). */
+  rowId?: number
+  /** Column↔residue map for the source row (fold kind only). */
+  map?: ResidueColumnMap
+  /** Extra note, e.g. superposition RMSD. */
+  note?: string
+}
+
+export interface ModelInfo {
+  id: string
+  label: string
+  color: string
+  kind: ModelKind
+  residues: number
+  origin: string
+  linked: boolean
+  note?: string
+}
 
 export interface StructureState {
-  phase: FoldPhase
-  /** Row id currently used as the structural reference, or null. */
-  referenceRowId: number | null
-  referenceName: string | null
-  structure: Structure | null
-  residues: number | null
-  /** Substituted (non-standard) residue count in the folded sequence. */
-  substitutions: number
-  message: string | null
-  errorKind: FoldError['kind'] | null
+  models: ModelInfo[]
+  modelsRev: number
+  busy: boolean
+  busyMessage: string | null
+  error: string | null
+  errorKind: FoldErrorKind | null
+  colorMode: ColorMode
+  representation: Representation
   sourceLabel: string
 }
 
 export class StructureController {
   private source: StructureSource = new EsmFoldSource()
   private cache = new FoldCache()
-  private map: ResidueColumnMap | null = null
-  private foldedSequence: string | null = null
-  private inFlight: AbortController | null = null
+  private models = new Map<string, StructureModel>()
+  private fileCounter = 0
+  private folding = false
 
   private state: StructureState = {
-    phase: 'idle',
-    referenceRowId: null,
-    referenceName: null,
-    structure: null,
-    residues: null,
-    substitutions: 0,
-    message: null,
+    models: [],
+    modelsRev: 0,
+    busy: false,
+    busyMessage: null,
+    error: null,
     errorKind: null,
+    colorMode: 'plddt',
+    representation: 'cartoon',
     sourceLabel: this.source.label,
   }
 
@@ -57,7 +86,7 @@ export class StructureController {
 
   constructor(private readonly editor: EditorController) {
     const store = editor.store
-    store.on('reset', () => this.clearReference()) // row ids are reassigned on load
+    store.on('reset', () => this.clearAll()) // row ids are reassigned on load
     const onEdit = () => this.onContentChanged()
     store.on('rowsChanged', onEdit)
     store.on('orderChanged', onEdit)
@@ -72,178 +101,202 @@ export class StructureController {
   }
   getVersion = (): number => this.version
   snapshot = (): StructureState => this.state
-  private bump(patch: Partial<StructureState>): void {
-    this.state = { ...this.state, ...patch }
+
+  private modelInfos(): ModelInfo[] {
+    return [...this.models.values()].map((m) => ({
+      id: m.id,
+      label: m.label,
+      color: m.color,
+      kind: m.kind,
+      residues: m.structure.residueCount,
+      origin: m.structure.origin,
+      linked: m.rowId != null,
+      note: m.note,
+    }))
+  }
+  private emit(patch: Partial<StructureState> = {}, modelsChanged = false): void {
+    this.state = {
+      ...this.state,
+      ...patch,
+      models: this.modelInfos(),
+      modelsRev: this.state.modelsRev + (modelsChanged ? 1 : 0),
+    }
     this.version++
     for (const fn of this.listeners) fn()
   }
 
-  // ---- reference selection & folding -------------------------------------
+  /** Models for the viewer, in insertion order. */
+  viewerModels(): ViewerModel[] {
+    return [...this.models.values()].map((m) => ({
+      id: m.id,
+      pdb: m.structure.pdb,
+      plddt: m.structure.plddt,
+      color: m.color,
+    }))
+  }
 
-  /** True if a row id is still present in the current alignment. */
   private rowExists(id: number): boolean {
     return this.editor.store.orderSnapshot().includes(id)
   }
-
-  /** Pin a row as the structural reference and fold it (cache-first). */
-  async setReference(rowId: number): Promise<void> {
-    if (!this.rowExists(rowId)) return
-    const name = this.editor.store.getRow(rowId).name
-    this.map = null
-    this.foldedSequence = null
-    await this.foldRow(rowId, name)
+  private nextColor(): string {
+    const used = new Set([...this.models.values()].map((m) => m.color))
+    return MODEL_COLORS.find((c) => !used.has(c)) ?? MODEL_COLORS[this.models.size % MODEL_COLORS.length]
   }
 
-  private async foldRow(rowId: number, name: string): Promise<void> {
+  // ---- folding -----------------------------------------------------------
+
+  /**
+   * Fold one or more alignment rows and add/update a model for each. Folds the
+   * SELECTED rows (passed in) — this is what fixes "always folds the first row":
+   * selecting a sequence name doesn't move the cursor, so the caller passes the
+   * selected row ids explicitly.
+   */
+  async foldRows(rowIds: number[]): Promise<void> {
+    if (this.folding || rowIds.length === 0) return
+    this.folding = true
+    this.emit({ busy: true, busyMessage: `Folding ${rowIds.length} sequence${rowIds.length > 1 ? 's' : ''}…`, error: null, errorKind: null })
+    let failed: FoldError | null = null
+    for (let i = 0; i < rowIds.length; i++) {
+      if (!this.rowExists(rowIds[i])) continue
+      this.emit({ busyMessage: `Folding ${i + 1}/${rowIds.length}: ${this.editor.store.getRow(rowIds[i]).name}…` })
+      try {
+        await this.foldOne(rowIds[i])
+      } catch (e) {
+        failed = e instanceof FoldError ? e : new FoldError('network', String(e))
+      }
+    }
+    this.folding = false
+    this.emit(
+      failed
+        ? { busy: false, busyMessage: null, error: failed.message, errorKind: failed.kind }
+        : { busy: false, busyMessage: null, error: null, errorKind: null },
+    )
+  }
+
+  private async foldOne(rowId: number): Promise<void> {
     const codes = this.editor.store.materializeRow(rowId)
     const input = toFoldInput(codes)
+    if (input.sequence.length === 0) throw new FoldError('empty', 'That sequence has no residues to fold')
 
-    // Cache-first: identical sequences never re-fetch.
     const cached = this.cache.get(input.sequence)
-    if (cached) {
-      this.map = ResidueColumnMap.build(codes)
-      this.foldedSequence = input.sequence
-      this.bump({
-        phase: 'ready',
-        referenceRowId: rowId,
-        referenceName: name,
-        structure: cached,
-        residues: cached.residueCount,
-        substitutions: input.substitutions,
-        message: cached.origin,
-        errorKind: null,
-      })
-      return
-    }
+    const structure = cached ?? (await this.source.fold(input.sequence))
+    if (!cached) this.cache.set(input.sequence, structure)
 
-    this.inFlight?.abort()
-    const ac = new AbortController()
-    this.inFlight = ac
-    this.bump({
-      phase: 'loading',
-      referenceRowId: rowId,
-      referenceName: name,
-      structure: null,
-      residues: input.sequence.length,
-      substitutions: input.substitutions,
-      message: `Folding ${input.sequence.length} residues…`,
-      errorKind: null,
+    const id = `row:${rowId}`
+    const existing = this.models.get(id)
+    this.models.set(id, {
+      id,
+      label: this.editor.store.getRow(rowId).name,
+      structure,
+      color: existing?.color ?? this.nextColor(),
+      kind: 'fold',
+      rowId,
+      map: ResidueColumnMap.build(codes),
+      note: input.substitutions > 0 ? `${input.substitutions} substituted` : undefined,
     })
-
-    try {
-      const structure = await this.source.fold(input.sequence, ac.signal)
-      if (ac.signal.aborted) return
-      this.cache.set(input.sequence, structure)
-      this.map = ResidueColumnMap.build(codes)
-      this.foldedSequence = input.sequence
-      this.bump({
-        phase: 'ready',
-        structure,
-        residues: structure.residueCount,
-        message: structure.origin,
-        errorKind: null,
-      })
-    } catch (e) {
-      if (ac.signal.aborted) return
-      const err = e instanceof FoldError ? e : new FoldError('network', String(e))
-      this.bump({ phase: 'error', message: err.message, errorKind: err.kind })
-    } finally {
-      if (this.inFlight === ac) this.inFlight = null
-    }
+    this.emit({}, true)
   }
 
-  /** Re-fold the current reference (e.g. after a transient network error). */
-  retry(): void {
-    const id = this.state.referenceRowId
-    if (id != null && this.rowExists(id)) void this.foldRow(id, this.editor.store.getRow(id).name)
-  }
+  // ---- files & comparison -------------------------------------------------
 
-  /** Load an offline structure from an uploaded PDB file. */
-  loadFromFile(pdbText: string, fileName: string): void {
-    this.inFlight?.abort()
+  /** Load a local PDB as an independent model (offline). */
+  loadFile(pdbText: string, fileName: string): void {
     try {
       const structure = structureFromFile(pdbText, fileName)
-      // If a reference row is pinned, map against it; else linking is disabled.
-      const id = this.state.referenceRowId
-      this.map = id != null && this.rowExists(id) ? ResidueColumnMap.build(this.editor.store.materializeRow(id)) : null
-      this.bump({
-        phase: 'ready',
-        structure,
-        residues: structure.residueCount,
-        message: structure.origin,
-        errorKind: null,
-      })
+      const id = `file:${++this.fileCounter}`
+      this.models.set(id, { id, label: fileName, structure, color: this.nextColor(), kind: 'file' })
+      this.emit({ error: null, errorKind: null }, true)
     } catch (e) {
       const err = e instanceof FoldError ? e : new FoldError('invalid', String(e))
-      this.bump({ phase: 'error', message: err.message, errorKind: err.kind })
+      this.emit({ error: err.message, errorKind: err.kind })
     }
-  }
-
-  clearReference(): void {
-    this.inFlight?.abort()
-    this.inFlight = null
-    this.map = null
-    this.foldedSequence = null
-    this.bump({
-      phase: 'idle',
-      referenceRowId: null,
-      referenceName: null,
-      structure: null,
-      residues: null,
-      substitutions: 0,
-      message: null,
-      errorKind: null,
-    })
   }
 
   /**
-   * Content changed. Under gap-only editing the residues are invariant, so the
-   * fold stays valid (cache hit) and we only rebuild the column↔residue map;
-   * if residues somehow differ, we re-fold.
+   * Load a known structure to compare against an existing model, superposing it
+   * onto the target (best-fit over matched Cα by order) so they overlay.
+   * `targetId` defaults to the first fold model.
    */
-  private onContentChanged(): void {
-    const id = this.state.referenceRowId
-    if (id == null) return
-    if (!this.rowExists(id)) {
-      this.clearReference()
-      return
+  compareFile(pdbText: string, fileName: string, targetId?: string): void {
+    try {
+      let structure = structureFromFile(pdbText, fileName)
+      const target =
+        (targetId && this.models.get(targetId)) ?? [...this.models.values()].find((m) => m.kind === 'fold') ?? null
+      let note: string | undefined
+      if (target) {
+        const fit = superpose(parseCaCoords(structure.pdb), parseCaCoords(target.structure.pdb))
+        if (fit) {
+          structure = { ...structure, pdb: applyTransformToPdb(structure.pdb, fit.R, fit.t) }
+          note = `RMSD ${fit.rmsd.toFixed(2)} Å / ${fit.n} Cα vs ${target.label}`
+        } else {
+          note = 'too few Cα to superpose'
+        }
+      }
+      const id = `cmp:${++this.fileCounter}`
+      this.models.set(id, { id, label: fileName, structure, color: this.nextColor(), kind: 'compare', note })
+      this.emit({ error: null, errorKind: null }, true)
+    } catch (e) {
+      const err = e instanceof FoldError ? e : new FoldError('invalid', String(e))
+      this.emit({ error: err.message, errorKind: err.kind })
     }
-    const codes = this.editor.store.materializeRow(id)
-    const input = toFoldInput(codes)
-    if (this.foldedSequence != null && hashSequence(input.sequence) === hashSequence(this.foldedSequence)) {
-      // Same residues, gaps moved → rebuild the map only. No network, no bump
-      // of the structure itself; the panel re-derives the highlight on hover.
-      this.map = ResidueColumnMap.build(codes)
-    } else {
-      void this.foldRow(id, this.editor.store.getRow(id).name)
-    }
+  }
+
+  removeModel(id: string): void {
+    if (this.models.delete(id)) this.emit({}, true)
+  }
+  clearAll(): void {
+    this.models.clear()
+    this.emit({ busy: false, busyMessage: null, error: null, errorKind: null }, true)
+  }
+
+  setColorMode(mode: ColorMode): void {
+    this.emit({ colorMode: mode })
+  }
+  setRepresentation(rep: Representation): void {
+    this.emit({ representation: rep })
   }
 
   // ---- linking -----------------------------------------------------------
 
-  /** 0-based residue index for an alignment column (null on gap / no map). */
-  residueForColumn(col: number): number | null {
-    return this.map ? this.map.residueAtColumn(col) : null
+  /** Which model/residue an alignment hover maps to, or null. */
+  hoverTarget(visualRow: number, col: number): { modelId: string; index: number } | null {
+    const rowId = this.editor.store.rowIdAt(visualRow)
+    for (const m of this.models.values()) {
+      if (m.rowId === rowId && m.map) {
+        const index = m.map.residueAtColumn(col)
+        return index == null ? null : { modelId: m.id, index }
+      }
+    }
+    return null
   }
-  /** Alignment column for a 0-based residue index (null if unmapped). */
-  columnForResidue(residueIndex: number): number | null {
-    return this.map ? this.map.columnOfResidue(residueIndex) : null
+
+  /** A 3D residue pick jumps the alignment cursor to the matching column. */
+  pick(modelId: string, index: number | null): void {
+    if (index == null) return
+    const m = this.models.get(modelId)
+    if (!m || m.rowId == null || !m.map) return
+    const col = m.map.columnOfResidue(index)
+    const vrow = this.editor.store.orderSnapshot().indexOf(m.rowId)
+    if (col != null && vrow >= 0) this.editor.setCursor(vrow, col)
   }
-  /** True if a visual row is the current structural reference. */
-  isReferenceRow(visualIndex: number): boolean {
-    const id = this.state.referenceRowId
-    return id != null && this.editor.store.rowIdAt(visualIndex) === id
-  }
-  /** Current visual index of the reference row, or null if unset / removed. */
-  referenceVisualIndex(): number | null {
-    const id = this.state.referenceRowId
-    if (id == null) return null
-    const i = this.editor.store.orderSnapshot().indexOf(id)
-    return i < 0 ? null : i
+
+  private onContentChanged(): void {
+    let changed = false
+    for (const m of [...this.models.values()]) {
+      if (m.kind !== 'fold' || m.rowId == null) continue
+      if (!this.rowExists(m.rowId)) {
+        this.models.delete(m.id)
+        changed = true
+        continue
+      }
+      // Residues are invariant under gap edits — just rebuild the (cheap) map so
+      // hover↔residue stays aligned with the moved gaps. No re-fold.
+      m.map = ResidueColumnMap.build(this.editor.store.materializeRow(m.rowId))
+    }
+    if (changed) this.emit({}, true)
   }
 
   destroy(): void {
-    this.inFlight?.abort()
     this.listeners.clear()
   }
 }

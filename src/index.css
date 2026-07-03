@@ -231,8 +231,17 @@ canvas.grid {
   letter-spacing: 0.04em;
   color: var(--muted);
 }
+.structure-panel.fullscreen {
+  position: fixed;
+  inset: 0;
+  width: 100vw !important;
+  height: 100vh !important;
+  border-radius: 0;
+  z-index: 50;
+}
 .sp-toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 6px;
   border-bottom: 1px solid var(--border);
@@ -240,6 +249,47 @@ canvas.grid {
 .sp-btn {
   font-size: 11px;
   padding: 4px 8px;
+}
+.sp-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.sp-seg-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+.sp-seg-label {
+  width: 34px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.sp-seg {
+  font-size: 10.5px;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.sp-seg:hover {
+  background: var(--hover);
+}
+.sp-seg.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.sp-seg:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 .sp-viewport {
   position: relative;
@@ -277,32 +327,85 @@ canvas.grid {
   color: var(--muted);
   max-width: 240px;
 }
-.sp-status {
-  padding: 4px 8px;
+.sp-models {
   border-top: 1px solid var(--border);
-  font-size: 10.5px;
-  color: var(--muted);
+  padding: 4px;
+  max-height: 132px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sp-model {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.sp-model:hover {
+  background: var(--hover);
+}
+.sp-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  flex: none;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.sp-model-name {
+  flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.sp-warn {
-  color: var(--warn, #f3a83c);
+.sp-model-meta {
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
 }
-.structure-panel .sp-resize {
+.sp-model-x {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.sp-model-x:hover {
+  color: var(--danger, #ef5d6c);
+}
+.sp-clear {
+  align-self: flex-end;
+  margin-top: 2px;
+  font-size: 10px;
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.sp-clear:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.structure-panel .sp-resize-bl {
   position: absolute;
-  top: 0;
+  bottom: 0;
   left: 0;
   width: 16px;
   height: 16px;
   z-index: 4;
-  cursor: nwse-resize;
+  cursor: nesw-resize;
   background:
-    linear-gradient(135deg, var(--accent) 0 3px, transparent 3px) no-repeat,
-    linear-gradient(135deg, transparent 4px, var(--accent) 4px 6px, transparent 6px) no-repeat;
+    linear-gradient(45deg, var(--accent) 0 3px, transparent 3px) no-repeat,
+    linear-gradient(45deg, transparent 4px, var(--accent) 4px 6px, transparent 6px) no-repeat;
   opacity: 0.7;
 }
-.structure-panel .sp-resize:hover {
+.structure-panel .sp-resize-bl:hover {
   opacity: 1;
 }
 

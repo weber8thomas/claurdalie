@@ -33,7 +33,7 @@ export default function App() {
   })
   const [structureSize, setStructureSize] = useState(() => {
     const p = loadPrefs()
-    return { w: p.structureW ?? 320, h: p.structureH ?? 340 }
+    return { w: p.structureW ?? 380, h: p.structureH ?? 460 }
   })
   const [tooltipEnabled, setTooltipEnabled] = useState(() => loadPrefs().tooltipEnabled ?? true)
   const [hover, setHover] = useState<HoverPayload | null>(null)

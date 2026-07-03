@@ -358,6 +358,12 @@ export class EditorController {
   selectedRowCount(): number {
     return this.renderer.selectedRowIds.size
   }
+  /** Selected sequence row ids in visual (top-to-bottom) order. */
+  selectedRowIdsInOrder(): number[] {
+    const set = this.renderer.selectedRowIds
+    if (!set.size) return []
+    return this.store.orderSnapshot().filter((id) => set.has(id))
+  }
   selectRowSingle(v: number): void {
     this.renderer.selection = null
     const ids = this.renderer.selectedRowIds

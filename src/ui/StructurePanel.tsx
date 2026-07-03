@@ -2,14 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useSyncExternalStore } from 'react'
 import type { EditorController } from '../editor/EditorController'
 import type { StructureController } from '../structure/StructureController'
-import { createStructureViewer, type StructureViewer } from '../structure/viewer'
+import { createStructureViewer, type StructureViewer, type ColorMode, type Representation } from '../structure/viewer'
 import { useEditorSnapshot } from './useEditor'
 import type { HoverPayload } from '../editor/interaction'
 
-const MIN_W = 220
-const MIN_H = 200
-const MAX_W = 640
-const MAX_H = 640
+const MIN_W = 240
+const MIN_H = 240
+const MAX_W = 720
+const MAX_H = 760
 
 interface Props {
   ctrl: EditorController
@@ -22,39 +22,45 @@ interface Props {
   onToast: (msg: string) => void
 }
 
-/** Subscribe to the structure controller's state. */
 function useStructureState(structure: StructureController) {
   useSyncExternalStore(structure.subscribe, structure.getVersion, structure.getVersion)
   return structure.snapshot()
 }
 
+const COLOR_MODES: { id: ColorMode; label: string }[] = [
+  { id: 'plddt', label: 'pLDDT' },
+  { id: 'model', label: 'Model' },
+  { id: 'spectrum', label: 'Rainbow' },
+  { id: 'chain', label: 'Chain' },
+]
+const VIEWS: { id: Representation; label: string }[] = [
+  { id: 'cartoon', label: 'Cartoon' },
+  { id: 'trace', label: 'Trace' },
+  { id: 'stick', label: 'Stick' },
+  { id: 'sphere', label: 'Sphere' },
+]
+
 export function StructurePanel({ ctrl, structure, hover, width, height, onResize, onClose, onToast }: Props) {
   const snap = useEditorSnapshot(ctrl)
   const st = useStructureState(structure)
   const hostRef = useRef<HTMLDivElement>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const foldFileRef = useRef<HTMLInputElement>(null)
+  const compareFileRef = useRef<HTMLInputElement>(null)
   const viewerRef = useRef<StructureViewer | null>(null)
   const [viewerReady, setViewerReady] = useState(false)
   const [viewerError, setViewerError] = useState<string | null>(null)
+  const [fullscreen, setFullscreen] = useState(false)
 
-  // Create the (dynamically-imported) WebGL viewer once the host div exists.
+  // Create the dynamically-imported WebGL viewer once.
   useEffect(() => {
     let disposed = false
     const host = hostRef.current
     if (!host) return
     createStructureViewer(host, { dark: snap.dark })
       .then((v) => {
-        if (disposed) {
-          v.dispose()
-          return
-        }
+        if (disposed) return v.dispose()
         viewerRef.current = v
-        v.onResiduePick((residue) => {
-          if (residue == null) return
-          const col = structure.columnForResidue(residue)
-          const vrow = structure.referenceVisualIndex()
-          if (col != null && vrow != null) ctrl.setCursor(vrow, col)
-        })
+        v.onResiduePick((modelId, index) => structure.pick(modelId, index))
         setViewerReady(true)
       })
       .catch((e) => setViewerError(String(e?.message ?? e)))
@@ -63,38 +69,49 @@ export function StructurePanel({ ctrl, structure, hover, width, height, onResize
       viewerRef.current?.dispose()
       viewerRef.current = null
     }
-    // Recreate only if the host element identity changes (mount/unmount).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Push a new structure into the viewer when it changes.
+  // Reconcile models whenever the set changes; re-center to include new ones.
   useEffect(() => {
-    if (viewerReady && st.structure) viewerRef.current?.load(st.structure)
-  }, [viewerReady, st.structure])
+    if (viewerReady) viewerRef.current?.setModels(structure.viewerModels(), true)
+  }, [viewerReady, st.modelsRev, structure])
+  useEffect(() => {
+    if (viewerReady) viewerRef.current?.setColorMode(st.colorMode)
+  }, [viewerReady, st.colorMode])
+  useEffect(() => {
+    if (viewerReady) viewerRef.current?.setRepresentation(st.representation)
+  }, [viewerReady, st.representation])
 
-  // Drive the 3D highlight from alignment hover (only on the reference row).
+  // Drive the 3D highlight from alignment hover (any folded sequence).
   useEffect(() => {
     const v = viewerRef.current
     if (!v || !viewerReady) return
-    if (hover && structure.isReferenceRow(hover.row)) {
-      v.highlightResidue(structure.residueForColumn(hover.col))
-    } else {
-      v.highlightResidue(null)
-    }
-  }, [hover, viewerReady, st.structure, structure])
+    const t = hover ? structure.hoverTarget(hover.row, hover.col) : null
+    v.highlightResidue(t?.modelId ?? null, t?.index ?? null)
+  }, [hover, viewerReady, st.modelsRev, structure])
 
-  const foldCursorRow = () => {
-    if (snap.rows === 0) return
-    const row = snap.cursor?.row ?? 0
-    const id = ctrl.store.rowIdAt(row)
-    onToast(`Folding ${ctrl.store.rowName(row)}…`)
-    void structure.setReference(id)
+  // Resize the GL canvas when the panel box or fullscreen state changes.
+  useEffect(() => {
+    viewerRef.current?.resize()
+  }, [width, height, fullscreen])
+
+  const foldActive = () => {
+    const selected = ctrl.selectedRowIdsInOrder()
+    const ids = selected.length ? selected : snap.cursor ? [ctrl.store.rowIdAt(snap.cursor.row)] : []
+    if (!ids.length) return
+    onToast(ids.length > 1 ? `Folding ${ids.length} sequences…` : `Folding ${ctrl.store.rowName(ctrl.store.orderSnapshot().indexOf(ids[0]))}…`)
+    void structure.foldRows(ids)
   }
 
-  const onPickFile = async (file: File) => {
-    const text = await file.text()
-    structure.loadFromFile(text, file.name)
-    onToast(`Loaded structure ${file.name}`)
+  const saveImage = () => {
+    const uri = viewerRef.current?.snapshot()
+    if (!uri) return
+    const a = document.createElement('a')
+    a.href = uri
+    a.download = 'structure.png'
+    a.click()
+    onToast('Saved structure.png')
   }
 
   const startResize = (e: React.PointerEvent) => {
@@ -105,8 +122,9 @@ export function StructurePanel({ ctrl, structure, hover, width, height, onResize
     const sw = width
     const sh = height
     const move = (ev: PointerEvent) => {
+      // Bottom-left handle on a top-right-anchored panel: left edge & bottom edge.
       const w = Math.max(MIN_W, Math.min(MAX_W, sw - (ev.clientX - sx)))
-      const h = Math.max(MIN_H, Math.min(MAX_H, sh - (ev.clientY - sy)))
+      const h = Math.max(MIN_H, Math.min(MAX_H, sh + (ev.clientY - sy)))
       onResize(Math.round(w), Math.round(h))
     }
     const up = () => {
@@ -118,86 +136,93 @@ export function StructurePanel({ ctrl, structure, hover, width, height, onResize
     window.addEventListener('pointerup', up)
   }
 
-  useEffect(() => {
-    viewerRef.current?.resize()
-  }, [width, height])
-
-  const busy = st.phase === 'loading'
+  const boxStyle = fullscreen ? undefined : { width, height }
 
   return (
-    <div className="structure-panel" style={{ width, height }}>
-      <div className="sp-resize" title="Resize" onPointerDown={startResize} />
+    <div className={'structure-panel' + (fullscreen ? ' fullscreen' : '')} style={boxStyle}>
+      {!fullscreen && <div className="sp-resize-bl" title="Resize" onPointerDown={startResize} />}
       <div className="sp-head">
         <span className="sp-title">3D structure</span>
+        <button className="mm-close" title={fullscreen ? 'Exit full screen' : 'Full screen'} onClick={() => setFullscreen((f) => !f)}>
+          {fullscreen ? '🡖' : '⛶'}
+        </button>
         <button className="mm-close" title="Hide structure panel" onClick={onClose}>
           ×
         </button>
       </div>
 
       <div className="sp-toolbar">
-        <button className="btn sp-btn" onClick={foldCursorRow} disabled={busy || snap.rows === 0} title="Fold the sequence at the cursor via ESMFold (online)">
-          {busy ? 'Folding…' : 'Fold sequence'}
+        <button className="btn sp-btn" onClick={foldActive} disabled={st.busy || snap.rows === 0} title="Fold the selected sequence(s) via ESMFold (online)">
+          {st.busy ? 'Folding…' : ctrl.selectedRowCount() > 1 ? `Fold ${ctrl.selectedRowCount()}` : 'Fold sequence'}
         </button>
-        <button className="btn sp-btn" onClick={() => fileRef.current?.click()} title="Load a local PDB structure (offline)">
+        <button className="btn sp-btn" onClick={() => foldFileRef.current?.click()} title="Load a local PDB structure (offline)">
           Load PDB…
         </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".pdb,.ent,.cif,.mmcif,.txt"
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) void onPickFile(f)
-            e.target.value = ''
-          }}
-        />
+        <button className="btn sp-btn" onClick={() => compareFileRef.current?.click()} disabled={st.models.length === 0} title="Load a known structure and superpose it onto a folded model">
+          Compare…
+        </button>
+        <input ref={foldFileRef} type="file" accept=".pdb,.ent,.cif,.mmcif,.txt" hidden
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) f.text().then((t) => { structure.loadFile(t, f.name); onToast(`Loaded ${f.name}`) }); e.target.value = '' }} />
+        <input ref={compareFileRef} type="file" accept=".pdb,.ent,.cif,.mmcif,.txt" hidden
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) f.text().then((t) => { structure.compareFile(t, f.name); onToast(`Comparing ${f.name}`) }); e.target.value = '' }} />
+      </div>
+
+      <div className="sp-controls">
+        <div className="sp-seg-group" role="group" aria-label="Color mode">
+          <span className="sp-seg-label">Color</span>
+          {COLOR_MODES.map((c) => (
+            <button key={c.id} className={'sp-seg' + (st.colorMode === c.id ? ' active' : '')} onClick={() => structure.setColorMode(c.id)}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+        <div className="sp-seg-group" role="group" aria-label="Representation">
+          <span className="sp-seg-label">View</span>
+          {VIEWS.map((v) => (
+            <button key={v.id} className={'sp-seg' + (st.representation === v.id ? ' active' : '')} onClick={() => structure.setRepresentation(v.id)}>
+              {v.label}
+            </button>
+          ))}
+          <button className="sp-seg" title="Reset view" onClick={() => viewerRef.current?.resetView()}>Reset</button>
+          <button className="sp-seg" title="Save PNG image" onClick={saveImage} disabled={st.models.length === 0}>Image</button>
+        </div>
       </div>
 
       <div className="sp-viewport">
         <div ref={hostRef} className="sp-host" />
         {viewerError && <div className="sp-overlay sp-error">3D viewer failed to load: {viewerError}</div>}
-        {!viewerError && st.phase === 'idle' && (
+        {!viewerError && st.models.length === 0 && !st.busy && (
           <div className="sp-overlay sp-hint">
-            Put the cursor on a sequence and press <b>Fold sequence</b>, or load a local PDB.
-            <div className="sp-sub">ESMFold is an online service (≤400 residues); PDB loading is offline.</div>
+            Select one or more sequences, then press <b>Fold sequence</b> — or load a local PDB.
+            <div className="sp-sub">ESMFold is online (≤400 residues); PDB loading works offline.</div>
           </div>
         )}
-        {busy && <div className="sp-overlay sp-hint">{st.message}</div>}
-        {st.phase === 'error' && (
+        {st.busy && <div className="sp-overlay sp-hint">{st.busyMessage}</div>}
+        {st.error && !st.busy && (
           <div className="sp-overlay sp-error">
-            {st.message}
-            {st.errorKind === 'blocked' && (
-              <div className="sp-sub">
-                The browser could not reach ESMFold (CORS/network policy). Use <b>Load PDB…</b> for an offline
-                structure.
-              </div>
-            )}
-            {(st.errorKind === 'network' || st.errorKind === 'invalid') && (
-              <button className="btn sp-btn" style={{ marginTop: 8 }} onClick={() => structure.retry()}>
-                Retry
-              </button>
-            )}
+            {st.error}
+            {st.errorKind === 'blocked' && <div className="sp-sub">Blocked by CORS/network policy — use <b>Load PDB…</b> for an offline structure.</div>}
           </div>
         )}
       </div>
 
-      <div className="sp-status">
-        {st.phase === 'ready' && st.structure ? (
-          <>
-            <span className="sp-src">{st.message}</span>
-            {st.referenceName && <span className="sp-ref" title="Reference sequence"> · {st.referenceName}</span>}
-            <span> · {st.structure.residueCount} res</span>
-            {st.substitutions > 0 && (
-              <span className="sp-warn" title="Non-standard residues substituted to canonical for folding">
-                {' '}· {st.substitutions} subst.
+      {st.models.length > 0 && (
+        <div className="sp-models">
+          {st.models.map((m) => (
+            <div className="sp-model" key={m.id} title={m.origin + (m.note ? ` — ${m.note}` : '')}>
+              <span className="sp-swatch" style={{ background: m.color }} />
+              <span className="sp-model-name">{m.label}</span>
+              <span className="sp-model-meta">
+                {m.residues} res{m.linked ? ' · linked' : ''}{m.kind === 'compare' ? ' · cmp' : ''}
               </span>
-            )}
-          </>
-        ) : (
-          <span className="sp-src">{st.sourceLabel}</span>
-        )}
-      </div>
+              <button className="sp-model-x" title="Remove" onClick={() => structure.removeModel(m.id)}>×</button>
+            </div>
+          ))}
+          {st.models.length > 1 && (
+            <button className="sp-clear" onClick={() => structure.clearAll()}>Clear all</button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
