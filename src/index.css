@@ -1050,8 +1050,8 @@ kbd {
   top: var(--sp-3);
   left: 50%;
   transform: translateX(-50%);
-  width: min(720px, 92%);
-  height: 460px;
+  width: min(900px, 94%);
+  height: min(70vh, 560px);
   display: flex;
   flex-direction: column;
   background: var(--panel);

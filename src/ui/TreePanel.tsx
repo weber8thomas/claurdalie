@@ -57,13 +57,11 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.clearRect(0, 0, W, H)
 
-      const dark = snap.dark
-      const line = dark ? '#c8c8d0' : '#33333a'
-      const text = dark ? '#e8e8ea' : '#1a1a1e'
+      const th = readTreeTheme(snap.dark)
       const tree = model.current()
       if (!tree) {
-        ctx.fillStyle = dark ? '#8a8a94' : '#8a8a94'
-        ctx.font = "13px system-ui, sans-serif"
+        ctx.fillStyle = th.muted
+        ctx.font = `13px ${th.font}`
         ctx.fillText('No tree yet — press Build.', 16, 28)
         return
       }
@@ -71,9 +69,11 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
       const { scale, ox, oy } = view.current
       const nodes = [...layout.nodes.values()]
 
-      ctx.lineWidth = 1.2
-      ctx.strokeStyle = line
-      ctx.font = "11px system-ui, sans-serif"
+      ctx.lineWidth = 1.5
+      ctx.lineJoin = 'round'
+      ctx.lineCap = 'round'
+      ctx.strokeStyle = th.edge
+      ctx.font = `12px ${th.font}`
       ctx.textBaseline = 'middle'
 
       if (model.mode === 'dendrogram') {
@@ -83,38 +83,70 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
         const plotH = (H - margin * 2) * scale
         const px = (x: number) => margin + ox + x * plotW
         const py = (y: number) => margin + oy + y * plotH
-        // edges
+        // edges — orthogonal elbows with softly rounded corners
         for (const ln of nodes) {
           for (const c of ln.node.children) {
             const cl = layout.nodes.get(c.id)!
+            const x0 = px(ln.x)
+            const y0 = py(ln.y)
+            const cornerX = px(ln.x)
+            const cornerY = py(cl.y)
+            const x1 = px(cl.x)
+            const y1 = py(cl.y)
+            const r = Math.max(0, Math.min(6, Math.abs(cornerY - y0) / 2, Math.abs(x1 - cornerX) / 2))
             ctx.beginPath()
-            ctx.moveTo(px(ln.x), py(ln.y))
-            ctx.lineTo(px(ln.x), py(cl.y))
-            ctx.lineTo(px(cl.x), py(cl.y))
+            ctx.moveTo(x0, y0)
+            if (r > 0.5) {
+              ctx.arcTo(cornerX, cornerY, x1, y1, r)
+              ctx.lineTo(x1, y1)
+            } else {
+              ctx.lineTo(cornerX, cornerY)
+              ctx.lineTo(x1, y1)
+            }
             ctx.stroke()
           }
         }
-        drawDecorations(ctx, nodes, layout, (n) => ({ x: px(n.x), y: py(n.y) }), tree, model, nameColor, text, true, labelW, W - margin)
+        const leafSpacing = layout.leafCount > 1 ? plotH / (layout.leafCount - 1) : plotH
+        drawDecorations(ctx, nodes, (n) => ({ x: px(n.x), y: py(n.y) }), tree, model, nameColor, th, {
+          dendro: true,
+          maxLabelW: W - margin - 11,
+          leafSpacing,
+        })
       } else {
         const cx = W / 2 + ox
         const cy = H / 2 + oy
         const R = (Math.min(W, H) / 2 - 60) * scale
-        const pt = (n: LaidNode) => {
-          const { x, y } = radialXY(n)
-          return { x: cx + x * R, y: cy + y * R }
-        }
+        const polar = (radius: number, angle: number) => ({
+          x: cx + radius * R * Math.cos(angle),
+          y: cy + radius * R * Math.sin(angle),
+        })
+        // edges — an arc at the parent's radius spanning its children, then a
+        // radial spoke out to each child (classic radial phylogram).
         for (const ln of nodes) {
-          const a = pt(ln)
-          for (const c of ln.node.children) {
-            const cl = layout.nodes.get(c.id)!
-            const b = pt(cl)
+          if (ln.node.children.length === 0) continue
+          const kids = ln.node.children.map((c) => layout.nodes.get(c.id)!)
+          const angles = kids.map((k) => k.angle)
+          const a0 = Math.min(...angles)
+          const a1 = Math.max(...angles)
+          if (ln.radius > 0 && a1 > a0) {
             ctx.beginPath()
-            ctx.moveTo(a.x, a.y)
-            ctx.lineTo(b.x, b.y)
+            ctx.arc(cx, cy, ln.radius * R, a0, a1)
+            ctx.stroke()
+          }
+          for (const k of kids) {
+            const p0 = polar(ln.radius, k.angle)
+            const p1 = polar(k.radius, k.angle)
+            ctx.beginPath()
+            ctx.moveTo(p0.x, p0.y)
+            ctx.lineTo(p1.x, p1.y)
             ctx.stroke()
           }
         }
-        drawDecorations(ctx, nodes, layout, pt, tree, model, nameColor, text, false, 0, 0)
+        drawDecorations(ctx, nodes, (n) => polar(n.radius, n.angle), tree, model, nameColor, th, {
+          dendro: false,
+          maxLabelW: 150,
+          leafSpacing: Infinity,
+        })
       }
     }
 
@@ -226,51 +258,111 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
 
 // ---- drawing helpers (module-scope so both modes share them) --------------
 
+interface TreeTheme {
+  edge: string
+  text: string
+  muted: string
+  accent: string
+  danger: string
+  panel: string
+  font: string
+}
+
+/** Pull the live design tokens off the document so the tree tracks the app theme. */
+function readTreeTheme(dark: boolean): TreeTheme {
+  const cs = getComputedStyle(document.documentElement)
+  const v = (name: string, fb: string) => cs.getPropertyValue(name).trim() || fb
+  return {
+    edge: v('--muted', dark ? '#9099a4' : '#626a76'),
+    text: v('--text', dark ? '#e6e8ea' : '#16181c'),
+    muted: v('--muted', dark ? '#9099a4' : '#626a76'),
+    accent: v('--accent', dark ? '#2dd4bf' : '#0d9488'),
+    danger: v('--danger', dark ? '#f87171' : '#dc2626'),
+    panel: v('--panel', dark ? '#16181c' : '#ffffff'),
+    font: v('--font', "'Inter', system-ui, sans-serif"),
+  }
+}
+
+/** Clip `text` to `maxW` px with a trailing ellipsis (binary search on length). */
+function truncate(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
+  if (maxW <= 0) return ''
+  if (ctx.measureText(text).width <= maxW) return text
+  const ell = '…'
+  let lo = 0
+  let hi = text.length
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (ctx.measureText(text.slice(0, mid) + ell).width <= maxW) lo = mid
+    else hi = mid - 1
+  }
+  return lo > 0 ? text.slice(0, lo) + ell : ''
+}
+
+interface DecoOpts {
+  dendro: boolean
+  maxLabelW: number
+  /** Vertical px between adjacent leaves; used to thin labels when they collide. */
+  leafSpacing: number
+}
+
 function drawDecorations(
   ctx: CanvasRenderingContext2D,
   nodes: LaidNode[],
-  _layout: ReturnType<typeof layoutTree>,
   pos: (n: LaidNode) => { x: number; y: number },
   tree: ReturnType<TreeModel['current']>,
   model: TreeModel,
   nameColor: Map<string, string>,
-  text: string,
-  dendro: boolean,
-  labelW: number,
-  rightX: number,
+  th: TreeTheme,
+  opts: DecoOpts,
 ): void {
   if (!tree) return
+  const lineHeight = 13
+  // Draw every Nth label when leaves are packed tighter than the line height.
+  const stride = opts.dendro && opts.leafSpacing < lineHeight ? Math.ceil(lineHeight / Math.max(1, opts.leafSpacing)) : 1
+  let leafIdx = -1
   for (const ln of nodes) {
     const p = pos(ln)
     const n = ln.node
     if (n.children.length === 0) {
-      // leaf label + color dot
+      leafIdx++
+      // leaf color dot (ringed with the panel color for contrast)
       const color = model.colorBy === 'cluster' ? nameColor.get(n.name ?? '') : undefined
       if (color) {
-        ctx.fillStyle = color
         ctx.beginPath()
-        ctx.arc(p.x + (dendro ? 4 : 0), p.y, 3, 0, 2 * Math.PI)
+        ctx.arc(p.x + (opts.dendro ? 5 : 0), p.y, 3.5, 0, 2 * Math.PI)
+        ctx.fillStyle = color
         ctx.fill()
+        ctx.lineWidth = 1
+        ctx.strokeStyle = th.panel
+        ctx.stroke()
       }
-      ctx.fillStyle = text
-      const label = n.name ?? ''
-      if (dendro) {
+      if (stride > 1 && leafIdx % stride !== 0) continue
+      ctx.fillStyle = th.text
+      const label = truncate(ctx, n.name ?? '', opts.maxLabelW)
+      if (opts.dendro) {
         ctx.textAlign = 'left'
-        ctx.fillText(label, p.x + 9, p.y, labelW)
+        ctx.fillText(label, p.x + 11, p.y)
       } else {
-        ctx.textAlign = 'left'
-        ctx.fillText(label, p.x + 5, p.y)
+        // Radial: anchor labels away from the centre so they don't overlap the tree.
+        const leftHalf = Math.cos(ln.angle) < 0
+        ctx.textAlign = leftHalf ? 'right' : 'left'
+        ctx.fillText(label, p.x + (leftHalf ? -6 : 6), p.y)
       }
     } else if (model.showBootstrap && n.support !== undefined && tree.bootstrap > 0) {
-      // bootstrap disc: green above threshold, red below
-      ctx.fillStyle = n.support >= model.bootstrapThreshold ? '#22c55e' : '#ef5d6c'
+      // bootstrap disc: accent above threshold, danger below
       ctx.beginPath()
-      ctx.arc(p.x, p.y, 3, 0, 2 * Math.PI)
+      ctx.arc(p.x, p.y, 3.5, 0, 2 * Math.PI)
+      ctx.fillStyle = n.support >= model.bootstrapThreshold ? th.accent : th.danger
       ctx.fill()
+      ctx.lineWidth = 1
+      ctx.strokeStyle = th.panel
+      ctx.stroke()
     }
   }
+  // restore edge stroke defaults for any subsequent drawing
+  ctx.lineWidth = 1.5
+  ctx.strokeStyle = th.edge
   ctx.textAlign = 'left'
-  void rightX
 }
 
 /** Recompute node canvas positions and return the id of the node nearest (mx,my). */
