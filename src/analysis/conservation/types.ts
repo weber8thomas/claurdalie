@@ -17,6 +17,14 @@ export interface ConservationMethodInfo {
   blurb: string
 }
 
+/**
+ * How the conservation panel presents the data:
+ * - `tracks`  — Jalview-style: one or more score methods overlaid as line/bar tracks.
+ * - `cluster` — Cluspack-style: columns clustered by conservation into well- vs.
+ *               poorly-conserved bands for a single driving method.
+ */
+export type ConservationViewMode = 'tracks' | 'cluster'
+
 /** Per-column input: residue-code counts and the non-gap total. */
 export interface ColumnInput {
   counts: Uint16Array

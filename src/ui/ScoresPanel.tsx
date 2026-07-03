@@ -28,10 +28,17 @@ interface Props {
  */
 export function ScoresPanel({ ctrl, model, group, onClose }: Props) {
   const snap = useEditorSnapshot(ctrl)
-  // Re-render chrome when the model changes (computing state, shown set).
+  // Re-render chrome when the model changes (mode, shown set, computing state).
   useSyncExternalStore(
     (fn) => model.subscribe(fn),
-    () => model.shownMethods().join(',') + '|' + METHODS.map((m) => model.isComputing(m.id)).join(''),
+    () =>
+      model.mode_() +
+      '|' +
+      model.clusterMethod_() +
+      '|' +
+      model.shownMethods().join(',') +
+      '|' +
+      METHODS.map((m) => model.isComputing(m.id)).join(''),
   )
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -54,6 +61,24 @@ export function ScoresPanel({ ctrl, model, group, onClose }: Props) {
     const paint = () => {
       const rect = wrap.getBoundingClientRect()
       r.resize(rect.width, PANEL_H)
+      const theme = snap.dark ? DARK_TRACK : LIGHT_TRACK
+
+      // Cluster view: a single method, columns painted by conservation class.
+      if (model.mode_() === 'cluster') {
+        const method = model.clusterMethod_()
+        r.drawClusters({
+          cellW: ctrl.renderer.cellW,
+          scrollX: ctrl.renderer.scrollX,
+          gridWidthPx: ctrl.renderer.gridWidthPx,
+          colCount: ctrl.store.width,
+          theme,
+          dark: snap.dark,
+          method,
+          track: model.track(method),
+        })
+        return
+      }
+
       const shown = model.shownMethods()
       const axis = snap.dark ? '#e8e8ea' : '#1a1a1e'
       const groupColor = (id: number) => group?.clusterInfos().find((c) => c.id === id)?.color ?? METHOD_COLORS.multi
@@ -76,7 +101,7 @@ export function ScoresPanel({ ctrl, model, group, onClose }: Props) {
         scrollX: ctrl.renderer.scrollX,
         gridWidthPx: ctrl.renderer.gridWidthPx,
         colCount: ctrl.store.width,
-        theme: snap.dark ? DARK_TRACK : LIGHT_TRACK,
+        theme,
         tracks,
       })
     }
@@ -93,23 +118,63 @@ export function ScoresPanel({ ctrl, model, group, onClose }: Props) {
     }
   }, [ctrl, model, snap.dark])
 
+  const mode = model.mode_()
+  const clusterMethod = model.clusterMethod_()
+
   return (
     <div className="scores-panel" ref={wrapRef}>
       <div className="scores-chrome">
         <span className="scores-title">Conservation</span>
-        <div className="scores-methods">
-          {METHODS.map((m) => (
-            <button
-              key={m.id}
-              className={'chip' + (model.isShown(m.id) ? ' on' : '')}
-              title={m.blurb}
-              onClick={() => void model.toggle(m.id as ConservationMethodId)}
-            >
-              {model.isComputing(m.id) ? '…' : ''}
-              {m.label}
-            </button>
-          ))}
+        <div className="scores-mode" role="tablist" aria-label="Conservation view">
+          <button
+            role="tab"
+            aria-selected={mode === 'tracks'}
+            className={'seg' + (mode === 'tracks' ? ' on' : '')}
+            title="Overlay one or more conservation scores as tracks (Jalview-style)"
+            onClick={() => void model.setMode('tracks')}
+          >
+            Tracks
+          </button>
+          <button
+            role="tab"
+            aria-selected={mode === 'cluster'}
+            className={'seg' + (mode === 'cluster' ? ' on' : '')}
+            title="Cluster columns into well- vs. poorly-conserved residues (Cluspack-style)"
+            onClick={() => void model.setMode('cluster')}
+          >
+            Clusters
+          </button>
         </div>
+        {mode === 'tracks' ? (
+          <div className="scores-methods">
+            {METHODS.map((m) => (
+              <button
+                key={m.id}
+                className={'chip' + (model.isShown(m.id) ? ' on' : '')}
+                title={m.blurb}
+                onClick={() => void model.toggle(m.id as ConservationMethodId)}
+              >
+                {model.isComputing(m.id) ? '…' : ''}
+                {m.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="scores-methods">
+            <span className="scores-sublabel">cluster on</span>
+            {METHODS.map((m) => (
+              <button
+                key={m.id}
+                className={'chip' + (clusterMethod === m.id ? ' on' : '')}
+                title={`Group columns by ${m.label}: ${m.blurb}`}
+                onClick={() => void model.setClusterMethod(m.id as ConservationMethodId)}
+              >
+                {model.isComputing(m.id) && clusterMethod === m.id ? '…' : ''}
+                {m.label}
+              </button>
+            ))}
+          </div>
+        )}
         <button className="scores-close" title="Hide scores" onClick={onClose}>
           ✕
         </button>

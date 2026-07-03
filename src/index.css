@@ -815,11 +815,46 @@ kbd {
   font-size: 10px;
   font-weight: 600;
 }
+.scores-mode {
+  display: inline-flex;
+  gap: 0;
+  padding: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.scores-mode .seg {
+  font-family: var(--font);
+  font-size: 11px;
+  height: 18px;
+  padding: 0 10px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all var(--dur);
+}
+.scores-mode .seg:hover {
+  color: var(--text);
+}
+.scores-mode .seg.on {
+  color: #fff;
+  background: var(--accent);
+}
+.scores-sublabel {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  align-self: center;
+}
 .scores-methods {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
   flex: 1;
+  align-items: center;
 }
 .chip {
   font-family: var(--font);
