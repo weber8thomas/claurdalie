@@ -1,8 +1,14 @@
+import { useEffect } from 'react'
 import { SHORTCUTS } from '../editor/keymap'
 
 const GROUPS = [...new Set(SHORTCUTS.map((s) => s.group))]
 
 export function HelpOverlay({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -32,7 +38,7 @@ export function HelpOverlay({ onClose }: { onClose: () => void }) {
           (in Edit mode) to move them all together.
         </p>
         <div style={{ marginTop: 16, textAlign: 'right' }}>
-          <button className="primary" onClick={onClose}>
+          <button className="btn primary" onClick={onClose}>
             Close
           </button>
         </div>

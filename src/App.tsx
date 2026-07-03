@@ -6,6 +6,7 @@ import { StatusBar } from './ui/StatusBar'
 import { Minimap } from './ui/Minimap'
 import { SchemeLegend } from './ui/SchemeLegend'
 import { HelpOverlay } from './ui/HelpOverlay'
+import { AboutDialog } from './ui/AboutDialog'
 import { ThemeSync } from './ui/ThemeSync'
 import { ContextMenu, type MenuState } from './ui/ContextMenu'
 import { AATooltip } from './ui/AATooltip'
@@ -16,6 +17,7 @@ import type { HoverPayload } from './editor/interaction'
 export default function App() {
   const [ctrl, setCtrl] = useState<EditorController | null>(null)
   const [help, setHelp] = useState(false)
+  const [about, setAbout] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const [menu, setMenu] = useState<MenuState | null>(null)
@@ -75,6 +77,7 @@ export default function App() {
           ctrl={ctrl}
           onToast={showToast}
           onToggleHelp={toggleHelp}
+          onAbout={() => setAbout(true)}
           showLegend={showLegend}
           showMinimap={showMinimap}
           tooltipEnabled={tooltipEnabled}
@@ -102,9 +105,10 @@ export default function App() {
         )}
         {dragging && <div className="dropzone">Drop a FASTA file to load</div>}
       </div>
-      {ctrl && <StatusBar ctrl={ctrl} />}
+      {ctrl && <StatusBar ctrl={ctrl} onAbout={() => setAbout(true)} />}
       {ctrl && <ThemeSync ctrl={ctrl} />}
       {help && <HelpOverlay onClose={() => setHelp(false)} />}
+      {about && <AboutDialog onClose={() => setAbout(false)} />}
       {ctrl && menu && (
         <ContextMenu ctrl={ctrl} menu={menu} onClose={() => setMenu(null)} onToast={showToast} />
       )}

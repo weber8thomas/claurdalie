@@ -1,7 +1,8 @@
 import type { EditorController } from '../editor/EditorController'
 import { useEditorSnapshot } from './useEditor'
+import { APP_VERSION } from '../version'
 
-export function StatusBar({ ctrl }: { ctrl: EditorController }) {
+export function StatusBar({ ctrl, onAbout }: { ctrl: EditorController; onAbout: () => void }) {
   const s = useEditorSnapshot(ctrl)
   const sel = s.selection
   const selInfo = sel
@@ -32,6 +33,9 @@ export function StatusBar({ ctrl }: { ctrl: EditorController }) {
       {s.cursorMode && <span className="mode">EDIT MODE</span>}
       <span>zoom {Math.round((s.cellW / 16) * 100)}%</span>
       <span className="hint">Press ? for shortcuts</span>
+      <button className="ver-tag" onClick={onAbout} title="About Claurdalie">
+        v{APP_VERSION}
+      </button>
     </div>
   )
 }

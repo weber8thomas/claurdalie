@@ -38,8 +38,10 @@ body {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  font-weight: 650;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
   padding-right: var(--sp-2);
 }
 .brand-mark {
@@ -62,67 +64,88 @@ body {
 }
 
 /* ---- controls ----------------------------------------------------------- */
-button,
-select,
-.btn {
-  font-family: inherit;
+.btn,
+.icon,
+.select {
+  font-family: var(--font);
   font-size: 13px;
+  font-weight: 500;
+  height: 30px;
   color: var(--text);
-  background: var(--panel-2);
+  background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 6px 10px;
+  border-radius: 7px;
+  padding: 0 10px;
   cursor: pointer;
-  transition: background var(--dur), border-color var(--dur), transform var(--dur);
+  transition: background var(--dur), border-color var(--dur), color var(--dur);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   white-space: nowrap;
 }
-button:hover,
-.btn:hover {
+.btn svg,
+.icon svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+.btn:hover,
+.icon:hover,
+.select:hover {
   background: var(--hover);
   border-color: var(--border-strong);
 }
-button:active,
-.btn:active {
-  transform: translateY(1px);
+.btn:active,
+.icon:active {
+  background: var(--panel-2);
 }
-button:disabled {
+.btn:disabled,
+.icon:disabled {
   opacity: 0.4;
   cursor: default;
+  background: var(--panel);
 }
-button.primary {
+.btn.primary {
   background: var(--accent);
   color: var(--accent-fg);
   border-color: transparent;
+  font-weight: 550;
 }
-button.primary:hover {
+.btn.primary:hover {
+  filter: brightness(1.05);
   background: var(--accent);
-  filter: brightness(1.06);
 }
-button.icon {
-  padding: 6px 8px;
-  min-width: 32px;
+.icon {
+  width: 30px;
+  padding: 0;
   justify-content: center;
 }
-button.active {
+.btn.active,
+.icon.active {
   background: var(--accent-soft);
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
   color: var(--accent);
 }
-select {
-  padding-right: 8px;
+.btn.active svg,
+.icon.active svg {
+  opacity: 1;
+}
+.select {
+  color: var(--text);
 }
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+.tb-label {
+  color: var(--muted);
+  font-size: 12px;
+  margin-right: 1px;
+}
 .zoom-label {
   font-variant-numeric: tabular-nums;
   color: var(--muted);
   font-size: 12px;
-  min-width: 42px;
+  min-width: 40px;
   text-align: center;
 }
 
@@ -335,6 +358,76 @@ canvas.grid {
   font-weight: 600;
 }
 
+/* ---- about dialog + version tag ---------------------------------------- */
+.modal {
+  position: relative;
+}
+.modal-x {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.modal-x:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.about-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.about-ver {
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 2px 8px;
+  border-radius: 999px;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+.about-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+}
+.about-meta a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.about-meta a:hover {
+  text-decoration: underline;
+}
+.ver-tag {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ver-tag:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
 /* ---- overlays / modal --------------------------------------------------- */
 .overlay {
   position: fixed;
@@ -358,6 +451,9 @@ canvas.grid {
 }
 .modal h2 {
   margin: 0 0 var(--sp-4);
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
   font-size: 18px;
 }
 .modal .close {

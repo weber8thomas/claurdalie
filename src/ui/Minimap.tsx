@@ -98,8 +98,8 @@ export function Minimap({ ctrl, width, height, onResize, onClose }: Props) {
     ctx.fillRect(0, y1, W, H - y1)
     ctx.fillRect(0, y0, x0, y1 - y0)
     ctx.fillRect(x1, y0, W - x1, y1 - y0)
-    const accent = snap.dark ? '#7aa2ff' : '#2f6df6'
-    ctx.fillStyle = snap.dark ? 'rgba(122,162,255,0.14)' : 'rgba(47,109,246,0.12)'
+    const accent = snap.dark ? '#2dd4bf' : '#0d9488'
+    ctx.fillStyle = snap.dark ? 'rgba(45,212,191,0.16)' : 'rgba(13,148,136,0.13)'
     ctx.fillRect(x0, y0, x1 - x0, y1 - y0)
     ctx.strokeStyle = accent
     ctx.lineWidth = 2

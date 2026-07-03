@@ -23,10 +23,10 @@ export const LIGHT_CANVAS: CanvasTheme = {
   gridLine: 0xe6e8ec,
   text: 0x24242a,
   mutedText: 0x8a8f98,
-  cursor: 0x2f6df6,
-  selection: 0x2f6df6,
+  cursor: 0x0d9488,
+  selection: 0x0d9488,
   hover: 0x94a3b8,
-  dropLine: 0x2f6df6,
+  dropLine: 0x0d9488,
 }
 
 export const DARK_CANVAS: CanvasTheme = {
@@ -37,8 +37,8 @@ export const DARK_CANVAS: CanvasTheme = {
   gridLine: 0x2a2c33,
   text: 0xd8d8dc,
   mutedText: 0x8a8f98,
-  cursor: 0x5b8dff,
-  selection: 0x5b8dff,
+  cursor: 0x2dd4bf,
+  selection: 0x2dd4bf,
   hover: 0x64748b,
-  dropLine: 0x5b8dff,
+  dropLine: 0x2dd4bf,
 }

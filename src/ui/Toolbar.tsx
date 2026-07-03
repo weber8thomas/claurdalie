@@ -1,18 +1,7 @@
 import { useRef } from 'react'
 import type { EditorController } from '../editor/EditorController'
 import { useEditorSnapshot } from './useEditor'
-
-interface Props {
-  ctrl: EditorController
-  onToast: (msg: string) => void
-  onToggleHelp: () => void
-  showLegend: boolean
-  showMinimap: boolean
-  tooltipEnabled: boolean
-  onToggleLegend: () => void
-  onToggleMinimap: () => void
-  onToggleTooltip: () => void
-}
+import { Icon } from './Icon'
 
 /** Brand mark: a tiny colored alignment tile (residues + a gap). */
 function BrandMark() {
@@ -22,13 +11,26 @@ function BrandMark() {
     [14, 64, '#5b7cf0'], [33, 64, '#ef5d6c'], [52, 64, '#f3a83c'], [71, 64, '#2bb3a3'],
   ]
   return (
-    <svg className="brand-mark" viewBox="0 0 100 100" width="24" height="24" aria-hidden="true">
+    <svg className="brand-mark" viewBox="0 0 100 100" width="22" height="22" aria-hidden="true">
       <rect width="100" height="100" rx="22" fill="#12141c" />
       {cells.map(([x, y, fill, op], i) => (
         <rect key={i} x={x} y={y} width="15" height="18" rx="3" fill={fill} opacity={op ?? 1} />
       ))}
     </svg>
   )
+}
+
+interface Props {
+  ctrl: EditorController
+  onToast: (msg: string) => void
+  onToggleHelp: () => void
+  onAbout: () => void
+  showLegend: boolean
+  showMinimap: boolean
+  tooltipEnabled: boolean
+  onToggleLegend: () => void
+  onToggleMinimap: () => void
+  onToggleTooltip: () => void
 }
 
 const SCHEMES = [
@@ -43,6 +45,7 @@ export function Toolbar({
   ctrl,
   onToast,
   onToggleHelp,
+  onAbout,
   showLegend,
   showMinimap,
   tooltipEnabled,
@@ -54,8 +57,7 @@ export function Toolbar({
   const fileRef = useRef<HTMLInputElement>(null)
 
   const onImport = async (file: File) => {
-    const text = await file.text()
-    ctrl.loadFasta(text)
+    ctrl.loadFasta(await file.text())
     onToast(`Imported ${file.name} — ${ctrl.store.height} sequences`)
   }
   const onExport = () => {
@@ -97,13 +99,14 @@ export function Toolbar({
       </div>
 
       <div className="tb-group">
-        <button onClick={() => fileRef.current?.click()} title="Import FASTA">
-          ⬆ Import
+        <button className="btn" onClick={() => fileRef.current?.click()} title="Import FASTA">
+          <Icon name="import" /> Import
         </button>
-        <button onClick={onExport} title="Export FASTA">
-          ⬇ Export
+        <button className="btn" onClick={onExport} title="Export FASTA">
+          <Icon name="export" /> Export
         </button>
         <select
+          className="select"
           value=""
           onChange={(e) => {
             loadExample(e.target.value)
@@ -130,10 +133,10 @@ export function Toolbar({
       </div>
 
       <div className="tb-group">
-        <label className="hint" htmlFor="scheme">
+        <label className="tb-label" htmlFor="scheme">
           Color
         </label>
-        <select id="scheme" value={snap.schemeId} onChange={(e) => ctrl.setSchemeId(e.target.value)}>
+        <select id="scheme" className="select" value={snap.schemeId} onChange={(e) => ctrl.setSchemeId(e.target.value)}>
           {SCHEMES.map((s) => (
             <option key={s.id} value={s.id}>
               {s.label}
@@ -143,66 +146,61 @@ export function Toolbar({
       </div>
 
       <div className="tb-group">
-        <button className="icon" onClick={() => ctrl.zoomBy(1 / 1.15)} title="Zoom out (-)">
-          −
+        <button className="icon" onClick={() => ctrl.zoomBy(1 / 1.15)} title="Zoom out (−)">
+          <Icon name="minus" />
         </button>
         <span className="zoom-label">{zoomPct}%</span>
         <button className="icon" onClick={() => ctrl.zoomBy(1.15)} title="Zoom in (+)">
-          +
+          <Icon name="plus" />
         </button>
         <button className="icon" onClick={() => ctrl.resetZoom()} title="Reset zoom (0)">
-          ⤢
+          <Icon name="fit" />
         </button>
       </div>
 
       <div className="tb-group">
         <button
-          className={snap.cursorMode ? 'active' : ''}
+          className={'btn' + (snap.cursorMode ? ' active' : '')}
           onClick={() => ctrl.toggleCursorMode()}
-          title="Toggle cursor / edit mode (F2)"
+          title="Toggle edit mode (F2)"
         >
-          ✎ Edit mode
+          <Icon name="edit" /> Edit
         </button>
         <button className="icon" disabled={!snap.canUndo} onClick={() => ctrl.undoAction()} title="Undo (⌘Z)">
-          ↶
+          <Icon name="undo" />
         </button>
         <button className="icon" disabled={!snap.canRedo} onClick={() => ctrl.redoAction()} title="Redo (⌘⇧Z)">
-          ↷
+          <Icon name="redo" />
         </button>
       </div>
 
       <div className="spacer" />
 
       <div className="tb-group">
-        <button
-          className={'icon' + (showLegend ? ' active' : '')}
-          onClick={onToggleLegend}
-          title="Color legend"
-        >
-          🎨
+        <button className={'icon' + (showLegend ? ' active' : '')} onClick={onToggleLegend} title="Color legend">
+          <Icon name="palette" />
         </button>
-        <button
-          className={'icon' + (showMinimap ? ' active' : '')}
-          onClick={onToggleMinimap}
-          title="Minimap"
-        >
-          🗺
+        <button className={'icon' + (showMinimap ? ' active' : '')} onClick={onToggleMinimap} title="Minimap">
+          <Icon name="map" />
         </button>
         <button
           className={'icon' + (tooltipEnabled ? ' active' : '')}
           onClick={onToggleTooltip}
           title="Residue tooltip on hover"
         >
-          💬
+          <Icon name="message" />
         </button>
       </div>
 
       <div className="tb-group" style={{ borderRight: 'none' }}>
         <button className="icon" onClick={() => ctrl.setDark(!snap.dark)} title="Toggle theme">
-          {snap.dark ? '☀' : '☾'}
+          <Icon name={snap.dark ? 'sun' : 'moon'} />
         </button>
         <button className="icon" onClick={onToggleHelp} title="Keyboard shortcuts (?)">
-          ?
+          <Icon name="help" />
+        </button>
+        <button className="icon" onClick={onAbout} title="About Claurdalie">
+          <Icon name="info" />
         </button>
       </div>
     </div>
