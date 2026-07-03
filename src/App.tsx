@@ -12,6 +12,11 @@ import { ContextMenu, type MenuState } from './ui/ContextMenu'
 import { AATooltip } from './ui/AATooltip'
 import { StructurePanel } from './ui/StructurePanel'
 import { StructureController } from './structure/StructureController'
+import { SnapshotBar } from './ui/SnapshotBar'
+import { ScoresPanel } from './ui/ScoresPanel'
+import { ProjectStore, type ProjectHost } from './project/ProjectStore'
+import { ConservationModel } from './analysis/conservation/ConservationModel'
+import type { SerializableModule } from './project/types'
 import { loadPrefs, savePrefs } from './editor/persistence'
 import type { Hit } from './render/GridRenderer'
 import type { HoverPayload } from './editor/interaction'
@@ -26,7 +31,10 @@ export default function App() {
   const [showLegend, setShowLegend] = useState(() => loadPrefs().showLegend ?? true)
   const [showMinimap, setShowMinimap] = useState(() => loadPrefs().showMinimap ?? true)
   const [showStructure, setShowStructure] = useState(() => loadPrefs().showStructure ?? false)
+  const [showScores, setShowScores] = useState(() => loadPrefs().showScores ?? false)
   const [structure, setStructure] = useState<StructureController | null>(null)
+  const [project, setProject] = useState<ProjectStore | null>(null)
+  const [conservation, setConservation] = useState<ConservationModel | null>(null)
   const [minimapSize, setMinimapSize] = useState(() => {
     const p = loadPrefs()
     return { w: p.minimapW ?? 180, h: p.minimapH ?? 120 }
@@ -50,13 +58,14 @@ export default function App() {
       showLegend,
       showMinimap,
       showStructure,
+      showScores,
       tooltipEnabled,
       minimapW: minimapSize.w,
       minimapH: minimapSize.h,
       structureW: structureSize.w,
       structureH: structureSize.h,
     })
-  }, [showLegend, showMinimap, showStructure, tooltipEnabled, minimapSize, structureSize])
+  }, [showLegend, showMinimap, showStructure, showScores, tooltipEnabled, minimapSize, structureSize])
 
   // The structure controller lives alongside the editor and survives panel
   // open/close so a folded structure isn't lost when the panel is toggled.
@@ -67,6 +76,36 @@ export default function App() {
     return () => {
       sc.destroy()
       setStructure(null)
+    }
+  }, [ctrl])
+
+  // The Snapshot spine + conservation model. Every analytical module registers
+  // as a snapshot slice so switching instances restores exact state; a "view"
+  // slice carries the scheme/scroll/cursor so the display is restored too.
+  useEffect(() => {
+    if (!ctrl) return
+    const model = new ConservationModel(ctrl)
+    const host: ProjectHost = {
+      captureSequences: () => ctrl.store.toSequences(),
+      loadSequences: (seqs) => ctrl.loadSnapshotSequences(seqs),
+      sequenceCount: () => ctrl.store.height,
+      columnCount: () => ctrl.store.width,
+    }
+    const proj = new ProjectStore(host)
+    const viewSlice: SerializableModule<ReturnType<EditorController['viewState']>> = {
+      sliceKey: 'view',
+      serialize: () => ctrl.viewState(),
+      hydrate: (s) => ctrl.applyViewState(s),
+    }
+    proj.register(model)
+    proj.register(viewSlice)
+    proj.init('Original')
+    setConservation(model)
+    setProject(proj)
+    return () => {
+      model.destroy()
+      setConservation(null)
+      setProject(null)
     }
   }, [ctrl])
 
@@ -104,13 +143,16 @@ export default function App() {
           showLegend={showLegend}
           showMinimap={showMinimap}
           showStructure={showStructure}
+          showScores={showScores}
           tooltipEnabled={tooltipEnabled}
           onToggleLegend={() => setShowLegend((s) => !s)}
           onToggleMinimap={() => setShowMinimap((s) => !s)}
           onToggleStructure={() => setShowStructure((s) => !s)}
+          onToggleScores={() => setShowScores((s) => !s)}
           onToggleTooltip={() => setTooltipEnabled((s) => !s)}
         />
       )}
+      {ctrl && project && <SnapshotBar project={project} onToast={showToast} />}
       <div className="main">
         <AlignmentCanvas
           onReady={setCtrl}
@@ -142,6 +184,9 @@ export default function App() {
         )}
         {dragging && <div className="dropzone">Drop a FASTA file to load</div>}
       </div>
+      {ctrl && conservation && showScores && (
+        <ScoresPanel ctrl={ctrl} model={conservation} onClose={() => setShowScores(false)} />
+      )}
       {ctrl && <StatusBar ctrl={ctrl} onAbout={() => setAbout(true)} />}
       {ctrl && <ThemeSync ctrl={ctrl} />}
       {help && <HelpOverlay onClose={() => setHelp(false)} />}

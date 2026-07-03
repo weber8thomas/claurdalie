@@ -166,6 +166,35 @@ export class EditorController {
     this.datasetFallbackKind = 'demo'
     this.loadSequences(parseFasta(text))
   }
+  /**
+   * Load a snapshot's alignment when switching instances. Same as loadSequences
+   * but semantically distinct (the ProjectStore owns the transition) and a hook
+   * point for per-snapshot undo history in a later milestone.
+   */
+  loadSnapshotSequences(seqs: ParsedSequence[]): void {
+    this.loadSequences(seqs)
+  }
+
+  // ---- view state (captured per snapshot for exact instance restoration) ---
+
+  viewState(): { schemeId: string; scrollX: number; scrollY: number; cursor: CellPos | null; cursorMode: boolean } {
+    return {
+      schemeId: this.schemeId,
+      scrollX: this.renderer.scrollX,
+      scrollY: this.renderer.scrollY,
+      cursor: this.renderer.cursor,
+      cursorMode: this.cursorMode,
+    }
+  }
+  applyViewState(v: { schemeId?: string; scrollX?: number; scrollY?: number; cursor?: CellPos | null; cursorMode?: boolean } | undefined): void {
+    if (!v) return
+    if (v.schemeId && v.schemeId !== this.schemeId) this.setSchemeId(v.schemeId)
+    if (typeof v.cursorMode === 'boolean' && v.cursorMode !== this.cursorMode) this.toggleCursorMode()
+    this.renderer.cursor = v.cursor ?? null
+    this.renderer.setScroll(v.scrollX ?? 0, v.scrollY ?? 0)
+    this.renderer.markDirty()
+    this.bump()
+  }
   exportFasta(): string {
     return serializeFasta(this.store.toSequences())
   }

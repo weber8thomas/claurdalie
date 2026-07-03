@@ -28,10 +28,12 @@ interface Props {
   showLegend: boolean
   showMinimap: boolean
   showStructure: boolean
+  showScores: boolean
   tooltipEnabled: boolean
   onToggleLegend: () => void
   onToggleMinimap: () => void
   onToggleStructure: () => void
+  onToggleScores: () => void
   onToggleTooltip: () => void
 }
 
@@ -51,10 +53,12 @@ export function Toolbar({
   showLegend,
   showMinimap,
   showStructure,
+  showScores,
   tooltipEnabled,
   onToggleLegend,
   onToggleMinimap,
   onToggleStructure,
+  onToggleScores,
   onToggleTooltip,
 }: Props) {
   const snap = useEditorSnapshot(ctrl)
@@ -186,6 +190,13 @@ export function Toolbar({
         </button>
         <button className={'icon' + (showMinimap ? ' active' : '')} onClick={onToggleMinimap} title="Minimap">
           <Icon name="map" />
+        </button>
+        <button
+          className={'icon' + (showScores ? ' active' : '')}
+          onClick={onToggleScores}
+          title="Conservation scores"
+        >
+          <Icon name="chart" />
         </button>
         <button
           className={'icon' + (showStructure ? ' active' : '')}

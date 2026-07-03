@@ -15,6 +15,7 @@ export interface Prefs {
   showStructure?: boolean
   structureW?: number
   structureH?: number
+  showScores?: boolean
 }
 
 export function loadPrefs(): Prefs {

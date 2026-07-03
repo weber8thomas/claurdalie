@@ -1,5 +1,6 @@
-import { ALPHABET_SIZE, GAP_CODE } from '../alphabet'
+import { ALPHABET_SIZE } from '../alphabet'
 import type { AlignmentStore } from '../AlignmentStore'
+import { countColumn } from '../../analysis/conservation/columnCounts'
 
 /** Per-column residue frequencies and consensus, computed lazily and cached. */
 export interface ColumnStats {
@@ -44,12 +45,7 @@ export class ColumnStatsCache {
   private compute(col: number): ColumnStats {
     const counts = new Uint16Array(ALPHABET_SIZE)
     const h = this.store.height
-    let total = 0
-    for (let v = 0; v < h; v++) {
-      const code = this.store.residueAt(v, col)
-      counts[code]++
-      if (code !== GAP_CODE) total++
-    }
+    const total = countColumn((v) => this.store.residueAt(v, col), h, counts)
     let consensus = 0
     let best = 0
     for (let c = 1; c < ALPHABET_SIZE; c++) {

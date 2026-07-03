@@ -1,8 +1,10 @@
-# Claurdalie — high-performance web MSA editor
+# Claurdalie — high-performance web MSA explorer
 
-A browser-based **multiple sequence alignment (MSA) editor** built to stay smooth on
-very large alignments (thousands of sequences × tens of thousands of columns). 100 %
-client-side — nothing is uploaded.
+A browser-based **multiple sequence alignment (MSA) editor and analysis workbench**, built
+to stay smooth on very large alignments (thousands of sequences × tens of thousands of
+columns). 100 % client-side — nothing is uploaded. It is a lightweight, static-hosted
+reimagining of the [Ordalie](https://lbgi.fr/ordalie) desktop tool: the same multi-scale,
+snapshot-driven exploration of an alignment's informational content, in the browser.
 
 ## Features
 
@@ -21,6 +23,13 @@ client-side — nothing is uploaded.
   local PDB, colored by pLDDT confidence; hover a column to highlight the residue in 3D
   and click a residue to jump the alignment cursor. Runs in a separate, lazy-loaded WebGL
   surface so the alignment renderer stays untouched.
+- **Conservation analysis** — per-column scores computed off the main thread in a Web
+  Worker: **Shannon**, **Jensen-Shannon** (vs BLOSUM62 background), **Mean-Distances**
+  (ClustalX), **Vector Norm**, **BILD**, **Liu**, **Threshold**, and a **Multi** consensus,
+  drawn as a column-aligned scores track below the alignment (global track; per-group is next)
+- **Instances (snapshots)** — an always-visible combobox to juggle parallel analytical
+  hypotheses; switching an instance restores the *exact* state of the alignment **and** every
+  sub-module (which scores are shown, view, selection). Fork / overwrite / rename / delete
 - **Light / dark** theme, accessible controls, built-in demo + heavy stress datasets
 
 ## Getting started
@@ -64,6 +73,12 @@ ui/          React chrome only (toolbar, minimap, legend, status bar, help) — 
 datasets/    built-in light demo + deterministic heavy generator
 structure/   opt-in 3D: pluggable StructureSource (ESMFold / local PDB), fold cache
              (by sequence hash), column↔residue map, and a lazy WebGL viewer wrapper
+analysis/    conservation methods + physico-chemical matrices (BLOSUM62, volume/polarity);
+             pure, worker-safe scoring keyed off the shared column-count kernel
+workers/     numerics Web Worker + typed RPC (Transferables, no SharedArrayBuffer so it
+             works on GitHub Pages), with a main-thread fallback for offline/SSR
+project/     Snapshot spine: SerializableModule contract, ProjectStore (instant instance
+             switching), each analysis module serializes its state into the active snapshot
 ```
 
 Design rule #1: **React owns the chrome, never a residue.** The alignment surface is one
@@ -74,8 +89,19 @@ canvas driven imperatively, decoupled from React reconciliation.
 Static build deployed to **GitHub Pages** via `.github/workflows/deploy.yml`
 (`base: '/claurdalie/'`). No server, no COOP/COEP requirements.
 
-## Roadmap (deferred)
+## Roadmap
 
-WebGL/PixiJS renderer + MSDF atlas (behind the existing `Renderer` interface) and an
-optional Rust→WASM core, to be adopted if profiling on very large alignments shows
-GC-jank; plus phylogenetic tree, feature tracks, and more formats.
+Reimplementing Ordalie's analysis layer, client-side and lightweight. Shipped: conservation
++ the snapshot/instance spine (v0.4). Next, in dependency order:
+
+- **v0.5 — Clustering & groups**: k-means/DPC, Secator, mixture-model + AIC/BIC; separators,
+  group coloring, per-group score tracks
+- **v0.6 — Phylogenetic tree**: distance matrix → NJ/BIONJ, bootstrap, dendrogram + radial
+  viewer with re-root/swap
+- **v0.7 — Persistence + re-align**: `.clproj` project export/import (IndexedDB working
+  state); in-browser re-alignment via kalign (biowasm/Aioli) behind a pluggable `Aligner`,
+  with an optional exact-MAFFT-via-EBI provider; variant/mutation-effect seam
+- **v0.8 — Lighter tools**: Identity, GCG FindPatterns motif search, Snapshot Overview, Barcode
+
+Deferred infra: WebGL/PixiJS renderer + MSDF atlas (behind the existing `Renderer` interface)
+and Rust→WASM numeric kernels, adopted where profiling on very large alignments shows a ceiling.
