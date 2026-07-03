@@ -1,8 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { EditorController } from '../editor/EditorController'
 import { attachInteraction } from '../editor/interaction'
-import { parseFasta } from '../core/io/fasta'
-import { LIGHT_FASTA } from '../datasets/light'
 import type { Hit } from '../render/GridRenderer'
 import type { HoverPayload } from '../editor/interaction'
 
@@ -21,7 +19,7 @@ export function AlignmentCanvas({ onReady, onToggleHelp, onContextMenu, onHover 
     const canvas = canvasRef.current!
     const wrap = wrapRef.current!
     const ctrl = new EditorController(canvas)
-    ctrl.loadSequences(parseFasta(LIGHT_FASTA))
+    ctrl.restore()
 
     const applySize = () => {
       const r = wrap.getBoundingClientRect()

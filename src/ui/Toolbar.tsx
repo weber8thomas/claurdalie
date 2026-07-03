@@ -1,9 +1,6 @@
 import { useRef } from 'react'
 import type { EditorController } from '../editor/EditorController'
 import { useEditorSnapshot } from './useEditor'
-import { generateHeavy } from '../datasets/heavy'
-import { parseFasta } from '../core/io/fasta'
-import { LIGHT_FASTA } from '../datasets/light'
 
 interface Props {
   ctrl: EditorController
@@ -73,18 +70,18 @@ export function Toolbar({
   }
   const loadExample = (kind: string) => {
     if (kind === 'light') {
-      ctrl.loadSequences(parseFasta(LIGHT_FASTA))
+      ctrl.loadDemo()
       onToast('Loaded demo: cytochrome c (12 species)')
     } else if (kind === 'heavy') {
       onToast('Generating heavy dataset…')
       setTimeout(() => {
-        ctrl.loadSequences(generateHeavy({ rows: 3000, cols: 10000 }))
+        ctrl.loadExample('heavy')
         onToast('Loaded heavy: 3,000 × 10,000')
       }, 10)
     } else if (kind === 'huge') {
       onToast('Generating huge dataset…')
       setTimeout(() => {
-        ctrl.loadSequences(generateHeavy({ rows: 10000, cols: 30000, seed: 7 }))
+        ctrl.loadExample('huge')
         onToast('Loaded huge: 10,000 × 30,000')
       }, 10)
     }

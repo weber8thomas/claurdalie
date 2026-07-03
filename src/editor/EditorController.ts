@@ -13,6 +13,9 @@ import {
   insertGapColumn,
 } from '../core/edits/commands'
 import { parseFasta, serializeFasta, type ParsedSequence } from '../core/io/fasta'
+import { generateHeavy } from '../datasets/heavy'
+import { LIGHT_FASTA } from '../datasets/light'
+import { loadDataset, loadPrefs, savePrefs, saveAlignmentContent, saveDatasetKind } from './persistence'
 import { buildSchemes, DEFAULT_SCHEME_ID } from '../color/schemes'
 import type { ColorScheme } from '../color/scheme'
 import { GridRenderer, type CellPos, type Selection } from '../render/GridRenderer'
@@ -55,6 +58,9 @@ export class EditorController {
   private version = 0
 
   constructor(canvas: HTMLCanvasElement) {
+    const prefs = loadPrefs()
+    if (prefs.dark != null) this.dark = prefs.dark
+    if (prefs.schemeId) this.schemeId = prefs.schemeId
     this.schemes = buildSchemes(this.dark)
     this.renderer = new GridRenderer(canvas, this.store, this.stats, MONO)
     this.renderer.scheme = this.scheme()
@@ -65,20 +71,24 @@ export class EditorController {
     this.store.on('rowsChanged', (c) => {
       if (c.columns) this.stats.invalidate(c.columns[0], c.columns[1] + 1)
       this.contentVersion++
+      this.schedulePersist()
       this.renderer.markDirty()
     })
     this.store.on('layoutChanged', () => {
       this.contentVersion++
+      this.schedulePersist()
       this.renderer.markDirty()
     })
     this.store.on('orderChanged', () => {
       this.stats.clear()
       this.contentVersion++
+      this.schedulePersist()
       this.renderer.markDirty()
     })
     this.store.on('reset', () => {
       this.stats.clear()
       this.contentVersion++
+      this.schedulePersist()
       this.renderer.setScroll(0, 0)
       this.renderer.markDirty()
     })
@@ -99,6 +109,8 @@ export class EditorController {
   /** Bumps whenever the alignment DATA changes (edits, reorder, load). */
   getContentVersion = (): number => this.contentVersion
   private contentVersion = 0
+  private datasetFallbackKind = 'demo'
+  private persistTimer = 0
   /** Public trigger for imperative actions (e.g. wheel zoom) to refresh chrome. */
   snapshotBump = (): void => this.bump()
   private bump(): void {
@@ -149,10 +161,50 @@ export class EditorController {
     this.bump()
   }
   loadFasta(text: string): void {
+    this.datasetFallbackKind = 'demo'
     this.loadSequences(parseFasta(text))
   }
   exportFasta(): string {
     return serializeFasta(this.store.toSequences())
+  }
+
+  // ---- dataset sources & persistence -------------------------------------
+
+  loadDemo(): void {
+    this.datasetFallbackKind = 'demo'
+    this.loadSequences(parseFasta(LIGHT_FASTA))
+  }
+  loadExample(kind: 'heavy' | 'huge'): void {
+    this.datasetFallbackKind = kind
+    const seqs =
+      kind === 'huge'
+        ? generateHeavy({ rows: 10000, cols: 30000, seed: 7 })
+        : generateHeavy({ rows: 3000, cols: 10000 })
+    this.loadSequences(seqs)
+  }
+  /** Restore the last session's dataset (content if small, else regenerate, else demo). */
+  restore(): void {
+    const { kind, fasta } = loadDataset()
+    if (kind === 'content' && fasta) {
+      this.datasetFallbackKind = 'demo'
+      this.loadSequences(parseFasta(fasta))
+    } else if (kind === 'heavy' || kind === 'huge') {
+      this.loadExample(kind)
+    } else {
+      this.loadDemo()
+    }
+  }
+  private schedulePersist(): void {
+    if (typeof window === 'undefined') return
+    window.clearTimeout(this.persistTimer)
+    this.persistTimer = window.setTimeout(() => this.persistDataset(), 700)
+  }
+  private persistDataset(): void {
+    const cells = this.store.height * this.store.width
+    // Small alignments (incl. edits) persist verbatim; big ones store a kind to
+    // regenerate so localStorage quota isn't blown.
+    if (cells > 0 && cells <= 400_000) saveAlignmentContent(this.exportFasta())
+    else saveDatasetKind(this.datasetFallbackKind)
   }
 
   /** FASTA of a single visual row. */
@@ -219,6 +271,7 @@ export class EditorController {
     this.schemeId = id
     this.renderer.scheme = this.scheme()
     this.renderer.markDirty()
+    savePrefs({ schemeId: id })
     this.bump()
   }
   setDark(dark: boolean): void {
@@ -227,6 +280,7 @@ export class EditorController {
     this.renderer.scheme = this.scheme()
     this.renderer.theme = dark ? DARK_CANVAS : LIGHT_CANVAS
     this.renderer.markDirty()
+    savePrefs({ dark })
     this.bump()
   }
   toggleCursorMode(): void {

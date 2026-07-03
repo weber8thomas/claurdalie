@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { EditorController } from './editor/EditorController'
 import { AlignmentCanvas } from './ui/AlignmentCanvas'
 import { Toolbar } from './ui/Toolbar'
@@ -9,6 +9,7 @@ import { HelpOverlay } from './ui/HelpOverlay'
 import { ThemeSync } from './ui/ThemeSync'
 import { ContextMenu, type MenuState } from './ui/ContextMenu'
 import { AATooltip } from './ui/AATooltip'
+import { loadPrefs, savePrefs } from './editor/persistence'
 import type { Hit } from './render/GridRenderer'
 import type { HoverPayload } from './editor/interaction'
 
@@ -18,10 +19,13 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const [menu, setMenu] = useState<MenuState | null>(null)
-  const [showLegend, setShowLegend] = useState(true)
-  const [showMinimap, setShowMinimap] = useState(true)
-  const [minimapSize, setMinimapSize] = useState({ w: 180, h: 120 })
-  const [tooltipEnabled, setTooltipEnabled] = useState(true)
+  const [showLegend, setShowLegend] = useState(() => loadPrefs().showLegend ?? true)
+  const [showMinimap, setShowMinimap] = useState(() => loadPrefs().showMinimap ?? true)
+  const [minimapSize, setMinimapSize] = useState(() => {
+    const p = loadPrefs()
+    return { w: p.minimapW ?? 180, h: p.minimapH ?? 120 }
+  })
+  const [tooltipEnabled, setTooltipEnabled] = useState(() => loadPrefs().tooltipEnabled ?? true)
   const [hover, setHover] = useState<HoverPayload | null>(null)
   const toastTimer = useRef(0)
 
@@ -30,6 +34,16 @@ export default function App() {
     window.clearTimeout(toastTimer.current)
     toastTimer.current = window.setTimeout(() => setToast(null), 2400)
   }, [])
+
+  useEffect(() => {
+    savePrefs({
+      showLegend,
+      showMinimap,
+      tooltipEnabled,
+      minimapW: minimapSize.w,
+      minimapH: minimapSize.h,
+    })
+  }, [showLegend, showMinimap, tooltipEnabled, minimapSize])
 
   const toggleHelp = useCallback(() => setHelp((h) => !h), [])
   const openContextMenu = useCallback((x: number, y: number, hit: Hit) => setMenu({ x, y, hit }), [])
