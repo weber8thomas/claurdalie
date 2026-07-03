@@ -17,6 +17,10 @@ client-side — nothing is uploaded.
   (press `?` in the app for the full list)
 - **FASTA** import (button · drag-drop · works with `.fasta/.fa/.faa/.aln`) and export
 - **Minimap** overview with draggable viewport, column ruler, sequence gutter, status bar
+- **3D structure panel** (opt-in) — fold a reference sequence live via ESMFold or load a
+  local PDB, colored by pLDDT confidence; hover a column to highlight the residue in 3D
+  and click a residue to jump the alignment cursor. Runs in a separate, lazy-loaded WebGL
+  surface so the alignment renderer stays untouched.
 - **Light / dark** theme, accessible controls, built-in demo + heavy stress datasets
 
 ## Getting started
@@ -58,6 +62,8 @@ editor/      EditorController hub wiring model ⇄ renderer ⇄ UI
 ui/          React chrome only (toolbar, minimap, legend, status bar, help) — never
              renders a residue; design-token theming (light/dark)
 datasets/    built-in light demo + deterministic heavy generator
+structure/   opt-in 3D: pluggable StructureSource (ESMFold / local PDB), fold cache
+             (by sequence hash), column↔residue map, and a lazy WebGL viewer wrapper
 ```
 
 Design rule #1: **React owns the chrome, never a residue.** The alignment surface is one

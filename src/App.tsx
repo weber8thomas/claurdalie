@@ -10,6 +10,8 @@ import { AboutDialog } from './ui/AboutDialog'
 import { ThemeSync } from './ui/ThemeSync'
 import { ContextMenu, type MenuState } from './ui/ContextMenu'
 import { AATooltip } from './ui/AATooltip'
+import { StructurePanel } from './ui/StructurePanel'
+import { StructureController } from './structure/StructureController'
 import { loadPrefs, savePrefs } from './editor/persistence'
 import type { Hit } from './render/GridRenderer'
 import type { HoverPayload } from './editor/interaction'
@@ -23,9 +25,15 @@ export default function App() {
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [showLegend, setShowLegend] = useState(() => loadPrefs().showLegend ?? true)
   const [showMinimap, setShowMinimap] = useState(() => loadPrefs().showMinimap ?? true)
+  const [showStructure, setShowStructure] = useState(() => loadPrefs().showStructure ?? false)
+  const [structure, setStructure] = useState<StructureController | null>(null)
   const [minimapSize, setMinimapSize] = useState(() => {
     const p = loadPrefs()
     return { w: p.minimapW ?? 180, h: p.minimapH ?? 120 }
+  })
+  const [structureSize, setStructureSize] = useState(() => {
+    const p = loadPrefs()
+    return { w: p.structureW ?? 320, h: p.structureH ?? 340 }
   })
   const [tooltipEnabled, setTooltipEnabled] = useState(() => loadPrefs().tooltipEnabled ?? true)
   const [hover, setHover] = useState<HoverPayload | null>(null)
@@ -41,11 +49,26 @@ export default function App() {
     savePrefs({
       showLegend,
       showMinimap,
+      showStructure,
       tooltipEnabled,
       minimapW: minimapSize.w,
       minimapH: minimapSize.h,
+      structureW: structureSize.w,
+      structureH: structureSize.h,
     })
-  }, [showLegend, showMinimap, tooltipEnabled, minimapSize])
+  }, [showLegend, showMinimap, showStructure, tooltipEnabled, minimapSize, structureSize])
+
+  // The structure controller lives alongside the editor and survives panel
+  // open/close so a folded structure isn't lost when the panel is toggled.
+  useEffect(() => {
+    if (!ctrl) return
+    const sc = new StructureController(ctrl)
+    setStructure(sc)
+    return () => {
+      sc.destroy()
+      setStructure(null)
+    }
+  }, [ctrl])
 
   const toggleHelp = useCallback(() => setHelp((h) => !h), [])
   const openContextMenu = useCallback((x: number, y: number, hit: Hit) => setMenu({ x, y, hit }), [])
@@ -80,9 +103,11 @@ export default function App() {
           onAbout={() => setAbout(true)}
           showLegend={showLegend}
           showMinimap={showMinimap}
+          showStructure={showStructure}
           tooltipEnabled={tooltipEnabled}
           onToggleLegend={() => setShowLegend((s) => !s)}
           onToggleMinimap={() => setShowMinimap((s) => !s)}
+          onToggleStructure={() => setShowStructure((s) => !s)}
           onToggleTooltip={() => setTooltipEnabled((s) => !s)}
         />
       )}
@@ -101,6 +126,18 @@ export default function App() {
             height={minimapSize.h}
             onResize={(w, h) => setMinimapSize({ w, h })}
             onClose={() => setShowMinimap(false)}
+          />
+        )}
+        {ctrl && structure && showStructure && (
+          <StructurePanel
+            ctrl={ctrl}
+            structure={structure}
+            hover={hover}
+            width={structureSize.w}
+            height={structureSize.h}
+            onResize={(w, h) => setStructureSize({ w, h })}
+            onClose={() => setShowStructure(false)}
+            onToast={showToast}
           />
         )}
         {dragging && <div className="dropzone">Drop a FASTA file to load</div>}

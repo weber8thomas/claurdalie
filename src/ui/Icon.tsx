@@ -29,6 +29,7 @@ const PATHS: Record<string, string[]> = {
     'M20 11v6c0 1.66-3.58 3-8 3s-8-1.34-8-3v-6',
   ],
   x: ['M18 6 6 18', 'M6 6l12 12'],
+  cube: ['M21 7.5 12 3 3 7.5v9L12 21l9-4.5v-9z', 'M3 7.5 12 12l9-4.5', 'M12 12v9'],
 }
 
 export function Icon({ name, size = 16 }: { name: keyof typeof PATHS | string; size?: number }) {

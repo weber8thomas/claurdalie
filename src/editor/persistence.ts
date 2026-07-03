@@ -12,6 +12,9 @@ export interface Prefs {
   tooltipEnabled?: boolean
   minimapW?: number
   minimapH?: number
+  showStructure?: boolean
+  structureW?: number
+  structureH?: number
 }
 
 export function loadPrefs(): Prefs {
