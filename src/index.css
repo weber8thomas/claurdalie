@@ -311,6 +311,28 @@ canvas.grid {
   font-size: 11px;
   font-weight: 600;
   color: #111;
+  cursor: help;
+  transition: transform var(--dur);
+}
+.legend .sw:hover {
+  transform: scale(1.16);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.legend-desc {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  min-height: 17px;
+  line-height: 1.35;
+}
+.legend-desc strong {
+  font-family: var(--mono);
+}
+.legend-group {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 /* ---- overlays / modal --------------------------------------------------- */

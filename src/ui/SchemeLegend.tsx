@@ -16,7 +16,11 @@ const LABELS: Record<string, string> = {
 export function SchemeLegend({ ctrl, onClose }: { ctrl: EditorController; onClose: () => void }) {
   const snap = useEditorSnapshot(ctrl)
   const [collapsed, setCollapsed] = useState(false)
+  const [hovered, setHovered] = useState<number | null>(null)
   const lut = SCHEME_LUTS[snap.schemeId]
+
+  const hInfo = hovered != null ? AA_INFO[CODE_TO_CHAR[hovered]] : null
+  const hColored = hovered != null && lut ? lut[hovered] != null : true
 
   return (
     <div className="legend">
@@ -35,23 +39,41 @@ export function SchemeLegend({ ctrl, onClose }: { ctrl: EditorController; onClos
       </div>
       {!collapsed &&
         (lut ? (
-          <div className="swatches">
-            {AMINO_ACID_CODES.map((code) => {
-              const c = lut[code]
-              const bg = c ?? (snap.dark ? 0x2a2c33 : 0xeaecef)
-              const fg = luminance(bg) > 140 ? '#111' : '#fff'
-              const ch = CODE_TO_CHAR[code]
-              const info = AA_INFO[ch]
-              const title = info
-                ? `${ch} · ${info.name} (${info.three}) — ${info.group}${c == null ? ' · not colored in this scheme' : ''}`
-                : ch
-              return (
-                <span key={code} className="sw" style={{ background: toCss(bg), color: fg }} title={title}>
-                  {ch}
-                </span>
-              )
-            })}
-          </div>
+          <>
+            <div className="swatches">
+              {AMINO_ACID_CODES.map((code) => {
+                const c = lut[code]
+                const bg = c ?? (snap.dark ? 0x2a2c33 : 0xeaecef)
+                const fg = luminance(bg) > 140 ? '#111' : '#fff'
+                const ch = CODE_TO_CHAR[code]
+                const info = AA_INFO[ch]
+                const title = info ? `${ch} · ${info.name} (${info.three}) — ${info.group}` : ch
+                return (
+                  <span
+                    key={code}
+                    className="sw"
+                    style={{ background: toCss(bg), color: fg }}
+                    title={title}
+                    onMouseEnter={() => setHovered(code)}
+                    onMouseLeave={() => setHovered((h) => (h === code ? null : h))}
+                  >
+                    {ch}
+                  </span>
+                )
+              })}
+            </div>
+            <div className="legend-desc">
+              {hInfo ? (
+                <>
+                  <strong>{CODE_TO_CHAR[hovered!]}</strong> · {hInfo.name} ({hInfo.three}) —{' '}
+                  <span className="legend-group">{hInfo.group}</span>
+                  {!hColored && <span className="hint"> · not colored here</span>}
+                </>
+              ) : (
+                <span className="hint">Hover a color to see its property</span>
+              )}
+            </div>
+          </>
         ) : (
           <div className="hint" style={{ padding: '2px 0' }}>
             No per-residue colors for this scheme.
