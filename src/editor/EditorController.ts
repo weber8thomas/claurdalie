@@ -20,6 +20,8 @@ import { buildSchemes, DEFAULT_SCHEME_ID } from '../color/schemes'
 import type { ColorScheme } from '../color/scheme'
 import { GridRenderer, type CellPos, type Selection } from '../render/GridRenderer'
 import { DARK_CANVAS, LIGHT_CANVAS } from '../render/theme'
+import { alignmentEdits } from '../align/apply'
+import type { AlignedSeq } from '../align/types'
 
 const MONO = "'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace"
 
@@ -165,6 +167,35 @@ export class EditorController {
   loadFasta(text: string): void {
     this.datasetFallbackKind = 'demo'
     this.loadSequences(parseFasta(text))
+  }
+  /**
+   * Load a snapshot's alignment when switching instances. Same as loadSequences
+   * but semantically distinct (the ProjectStore owns the transition) and a hook
+   * point for per-snapshot undo history in a later milestone.
+   */
+  loadSnapshotSequences(seqs: ParsedSequence[]): void {
+    this.loadSequences(seqs)
+  }
+
+  // ---- view state (captured per snapshot for exact instance restoration) ---
+
+  viewState(): { schemeId: string; scrollX: number; scrollY: number; cursor: CellPos | null; cursorMode: boolean } {
+    return {
+      schemeId: this.schemeId,
+      scrollX: this.renderer.scrollX,
+      scrollY: this.renderer.scrollY,
+      cursor: this.renderer.cursor,
+      cursorMode: this.cursorMode,
+    }
+  }
+  applyViewState(v: { schemeId?: string; scrollX?: number; scrollY?: number; cursor?: CellPos | null; cursorMode?: boolean } | undefined): void {
+    if (!v) return
+    if (v.schemeId && v.schemeId !== this.schemeId) this.setSchemeId(v.schemeId)
+    if (typeof v.cursorMode === 'boolean' && v.cursorMode !== this.cursorMode) this.toggleCursorMode()
+    this.renderer.cursor = v.cursor ?? null
+    this.renderer.setScroll(v.scrollX ?? 0, v.scrollY ?? 0)
+    this.renderer.markDirty()
+    this.bump()
   }
   exportFasta(): string {
     return serializeFasta(this.store.toSequences())
@@ -357,6 +388,12 @@ export class EditorController {
   }
   selectedRowCount(): number {
     return this.renderer.selectedRowIds.size
+  }
+  /** Selected sequence row ids in visual (top-to-bottom) order. */
+  selectedRowIdsInOrder(): number[] {
+    const set = this.renderer.selectedRowIds
+    if (!set.size) return []
+    return this.store.orderSnapshot().filter((id) => set.has(id))
   }
   selectRowSingle(v: number): void {
     this.renderer.selection = null
@@ -607,6 +644,30 @@ export class EditorController {
     const adjusted = to > from ? to - 1 : to
     this.undo.do(new ReorderRowsCommand(from, adjusted))
     this.selectRow(adjusted)
+  }
+
+  /** Reorder all rows to an explicit id order as one undo entry (used by grouping). */
+  reorderToOrder(newOrder: number[]): void {
+    const before = this.store.orderSnapshot()
+    if (newOrder.length === before.length && newOrder.every((id, i) => id === before[i])) return
+    this.undo.do(new ReorderBlockCommand(before, newOrder))
+  }
+
+  /**
+   * Apply a fresh alignment layout (from an Aligner) to the matching rows as one
+   * undoable edit. Residues are invariant — only gaps move (see align/apply.ts).
+   */
+  applyAlignment(aligned: AlignedSeq[]): void {
+    this.undo.do(alignmentEdits(this.store, aligned))
+    this.renderer.selection = null
+    this.bump()
+  }
+
+  /** Optional per-row group color, drawn as a gutter stripe by the renderer. */
+  setGroupColorHook(fn: ((visualRow: number) => string | null) | null): void {
+    this.renderer.groupColorOf = fn
+    this.renderer.markDirty()
+    this.bump()
   }
 
   undoAction(): void {

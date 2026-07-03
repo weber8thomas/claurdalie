@@ -70,6 +70,8 @@ export class GridRenderer {
   cellH = 18
   scheme!: ColorScheme
   theme: CanvasTheme = LIGHT_CANVAS
+  /** Optional per-row group color (CSS), drawn as a gutter stripe. Set by GroupModel. */
+  groupColorOf: ((visualRow: number) => string | null) | null = null
   selection: Selection | null = null
   cursor: CellPos | null = null
   hover: CellPos | null = null
@@ -594,6 +596,25 @@ export class GridRenderer {
     const t = this.theme
     ctx.fillStyle = toCss(t.gutterBg)
     ctx.fillRect(0, RULER_H, GUTTER_W, this.cssH - RULER_H)
+
+    // Group color stripe + boundary lines (when a clustering is active).
+    if (this.groupColorOf) {
+      for (let v = vis.firstRow; v < vis.lastRow; v++) {
+        const y = this.cellY(v)
+        const color = this.groupColorOf(v)
+        if (color) {
+          ctx.fillStyle = color
+          ctx.fillRect(0, y, 5, this.cellH)
+        }
+        // Thin boundary between adjacent groups.
+        if (v > 0 && this.groupColorOf(v - 1) !== color) {
+          ctx.fillStyle = toCss(t.mutedText)
+          ctx.globalAlpha = 0.5
+          ctx.fillRect(0, y, GUTTER_W, 1)
+          ctx.globalAlpha = 1
+        }
+      }
+    }
 
     const sel = this.selection ? this.normSelection(this.selection) : null
     // Names use the SAME visibility threshold as residue glyphs, with a font

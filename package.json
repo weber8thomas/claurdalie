@@ -1,7 +1,7 @@
 {
   "name": "claurdalie",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.7.0",
   "type": "module",
   "description": "High-performance web-based multiple sequence alignment (MSA) editor",
   "scripts": {
@@ -13,6 +13,7 @@
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
+    "3dmol": "^2.5.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^4.5.5"

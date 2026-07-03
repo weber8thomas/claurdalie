@@ -27,9 +27,19 @@ interface Props {
   onAbout: () => void
   showLegend: boolean
   showMinimap: boolean
+  showStructure: boolean
+  showScores: boolean
+  showCluster: boolean
+  showTree: boolean
+  showAlign: boolean
   tooltipEnabled: boolean
   onToggleLegend: () => void
   onToggleMinimap: () => void
+  onToggleStructure: () => void
+  onToggleScores: () => void
+  onToggleCluster: () => void
+  onToggleTree: () => void
+  onToggleAlign: () => void
   onToggleTooltip: () => void
 }
 
@@ -48,9 +58,19 @@ export function Toolbar({
   onAbout,
   showLegend,
   showMinimap,
+  showStructure,
+  showScores,
+  showCluster,
+  showTree,
+  showAlign,
   tooltipEnabled,
   onToggleLegend,
   onToggleMinimap,
+  onToggleStructure,
+  onToggleScores,
+  onToggleCluster,
+  onToggleTree,
+  onToggleAlign,
   onToggleTooltip,
 }: Props) {
   const snap = useEditorSnapshot(ctrl)
@@ -182,6 +202,33 @@ export function Toolbar({
         </button>
         <button className={'icon' + (showMinimap ? ' active' : '')} onClick={onToggleMinimap} title="Minimap">
           <Icon name="map" />
+        </button>
+        <button
+          className={'icon' + (showScores ? ' active' : '')}
+          onClick={onToggleScores}
+          title="Conservation scores"
+        >
+          <Icon name="chart" />
+        </button>
+        <button
+          className={'icon' + (showCluster ? ' active' : '')}
+          onClick={onToggleCluster}
+          title="Clustering & groups"
+        >
+          <Icon name="group" />
+        </button>
+        <button className={'icon' + (showTree ? ' active' : '')} onClick={onToggleTree} title="Phylogenetic tree">
+          <Icon name="tree" />
+        </button>
+        <button className={'icon' + (showAlign ? ' active' : '')} onClick={onToggleAlign} title="Re-align sequences">
+          <Icon name="align" />
+        </button>
+        <button
+          className={'icon' + (showStructure ? ' active' : '')}
+          onClick={onToggleStructure}
+          title="3D structure panel"
+        >
+          <Icon name="cube" />
         </button>
         <button
           className={'icon' + (tooltipEnabled ? ' active' : '')}

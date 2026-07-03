@@ -10,6 +10,20 @@ import { AboutDialog } from './ui/AboutDialog'
 import { ThemeSync } from './ui/ThemeSync'
 import { ContextMenu, type MenuState } from './ui/ContextMenu'
 import { AATooltip } from './ui/AATooltip'
+import { StructurePanel } from './ui/StructurePanel'
+import { StructureController } from './structure/StructureController'
+import { SnapshotBar } from './ui/SnapshotBar'
+import { ScoresPanel } from './ui/ScoresPanel'
+import { ClusterDialog } from './ui/ClusterDialog'
+import { TreePanel } from './ui/TreePanel'
+import { AlignPanel } from './ui/AlignPanel'
+import { AlignController } from './align/AlignController'
+import { ProjectStore, type ProjectHost } from './project/ProjectStore'
+import { loadProject, saveProject } from './project/idb'
+import { ConservationModel } from './analysis/conservation/ConservationModel'
+import { GroupModel } from './analysis/cluster/GroupModel'
+import { TreeModel } from './tree/TreeModel'
+import type { SerializableModule } from './project/types'
 import { loadPrefs, savePrefs } from './editor/persistence'
 import type { Hit } from './render/GridRenderer'
 import type { HoverPayload } from './editor/interaction'
@@ -23,9 +37,24 @@ export default function App() {
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [showLegend, setShowLegend] = useState(() => loadPrefs().showLegend ?? true)
   const [showMinimap, setShowMinimap] = useState(() => loadPrefs().showMinimap ?? true)
+  const [showStructure, setShowStructure] = useState(() => loadPrefs().showStructure ?? false)
+  const [showScores, setShowScores] = useState(() => loadPrefs().showScores ?? false)
+  const [showCluster, setShowCluster] = useState(false)
+  const [showTree, setShowTree] = useState(false)
+  const [showAlign, setShowAlign] = useState(false)
+  const [structure, setStructure] = useState<StructureController | null>(null)
+  const [project, setProject] = useState<ProjectStore | null>(null)
+  const [conservation, setConservation] = useState<ConservationModel | null>(null)
+  const [groups, setGroups] = useState<GroupModel | null>(null)
+  const [tree, setTree] = useState<TreeModel | null>(null)
+  const [align, setAlign] = useState<AlignController | null>(null)
   const [minimapSize, setMinimapSize] = useState(() => {
     const p = loadPrefs()
     return { w: p.minimapW ?? 180, h: p.minimapH ?? 120 }
+  })
+  const [structureSize, setStructureSize] = useState(() => {
+    const p = loadPrefs()
+    return { w: p.structureW ?? 380, h: p.structureH ?? 460 }
   })
   const [tooltipEnabled, setTooltipEnabled] = useState(() => loadPrefs().tooltipEnabled ?? true)
   const [hover, setHover] = useState<HoverPayload | null>(null)
@@ -41,11 +70,109 @@ export default function App() {
     savePrefs({
       showLegend,
       showMinimap,
+      showStructure,
+      showScores,
       tooltipEnabled,
       minimapW: minimapSize.w,
       minimapH: minimapSize.h,
+      structureW: structureSize.w,
+      structureH: structureSize.h,
     })
-  }, [showLegend, showMinimap, tooltipEnabled, minimapSize])
+  }, [showLegend, showMinimap, showStructure, showScores, tooltipEnabled, minimapSize, structureSize])
+
+  // The structure controller lives alongside the editor and survives panel
+  // open/close so a folded structure isn't lost when the panel is toggled.
+  useEffect(() => {
+    if (!ctrl) return
+    const sc = new StructureController(ctrl)
+    setStructure(sc)
+    return () => {
+      sc.destroy()
+      setStructure(null)
+    }
+  }, [ctrl])
+
+  // The Snapshot spine + conservation model. Every analytical module registers
+  // as a snapshot slice so switching instances restores exact state; a "view"
+  // slice carries the scheme/scroll/cursor so the display is restored too.
+  useEffect(() => {
+    if (!ctrl) return
+    const model = new ConservationModel(ctrl)
+    const groupModel = new GroupModel(ctrl)
+    const treeModel = new TreeModel(ctrl)
+    // Per-group conservation tracks: feed group subsets to the conservation model
+    // and recompute shown tracks whenever the grouping changes.
+    model.setGroupProvider(() => groupModel.groups().map((g) => ({ id: g.clusterId, rows: g.rows })))
+    const offGroups = groupModel.subscribe(() => model.refresh())
+
+    const host: ProjectHost = {
+      captureSequences: () => ctrl.store.toSequences(),
+      loadSequences: (seqs) => ctrl.loadSnapshotSequences(seqs),
+      sequenceCount: () => ctrl.store.height,
+      columnCount: () => ctrl.store.width,
+    }
+    const proj = new ProjectStore(host)
+    const viewSlice: SerializableModule<ReturnType<EditorController['viewState']>> = {
+      sliceKey: 'view',
+      serialize: () => ctrl.viewState(),
+      hydrate: (s) => ctrl.applyViewState(s),
+    }
+    // Groups hydrate BEFORE conservation so per-group tracks are available when
+    // conservation recomputes on a snapshot switch.
+    proj.register(groupModel)
+    proj.register(model)
+    proj.register(treeModel)
+    proj.register(viewSlice)
+    proj.init('Original')
+
+    // Auto-persist the working project to IndexedDB (debounced), and restore any
+    // previously saved state on load. The seed above keeps the UI live while the
+    // async restore runs; the `restoring` guard stops the restore from re-saving.
+    let restoring = true
+    let saveTimer = 0
+    const scheduleSave = () => {
+      if (restoring) return
+      window.clearTimeout(saveTimer)
+      saveTimer = window.setTimeout(() => {
+        void proj.toFile().then(saveProject).catch(() => {})
+      }, 800)
+    }
+    const offProjSave = proj.subscribe(scheduleSave)
+    const offCtrlSave = ctrl.subscribe(scheduleSave)
+    void (async () => {
+      try {
+        const saved = await loadProject()
+        if (saved) await proj.fromFile(saved)
+      } catch {
+        // Corrupt / unreadable working state — keep the freshly seeded project.
+      } finally {
+        restoring = false
+      }
+    })()
+
+    const alignCtrl = new AlignController(ctrl, proj)
+
+    setConservation(model)
+    setGroups(groupModel)
+    setTree(treeModel)
+    setProject(proj)
+    setAlign(alignCtrl)
+    return () => {
+      offGroups()
+      offProjSave()
+      offCtrlSave()
+      window.clearTimeout(saveTimer)
+      model.destroy()
+      groupModel.destroy()
+      treeModel.destroy()
+      alignCtrl.destroy()
+      setConservation(null)
+      setGroups(null)
+      setTree(null)
+      setProject(null)
+      setAlign(null)
+    }
+  }, [ctrl])
 
   const toggleHelp = useCallback(() => setHelp((h) => !h), [])
   const openContextMenu = useCallback((x: number, y: number, hit: Hit) => setMenu({ x, y, hit }), [])
@@ -80,12 +207,23 @@ export default function App() {
           onAbout={() => setAbout(true)}
           showLegend={showLegend}
           showMinimap={showMinimap}
+          showStructure={showStructure}
+          showScores={showScores}
+          showCluster={showCluster}
+          showTree={showTree}
+          showAlign={showAlign}
           tooltipEnabled={tooltipEnabled}
           onToggleLegend={() => setShowLegend((s) => !s)}
           onToggleMinimap={() => setShowMinimap((s) => !s)}
+          onToggleStructure={() => setShowStructure((s) => !s)}
+          onToggleScores={() => setShowScores((s) => !s)}
+          onToggleCluster={() => setShowCluster((s) => !s)}
+          onToggleTree={() => setShowTree((s) => !s)}
+          onToggleAlign={() => setShowAlign((s) => !s)}
           onToggleTooltip={() => setTooltipEnabled((s) => !s)}
         />
       )}
+      {ctrl && project && <SnapshotBar project={project} onToast={showToast} />}
       <div className="main">
         <AlignmentCanvas
           onReady={setCtrl}
@@ -103,8 +241,32 @@ export default function App() {
             onClose={() => setShowMinimap(false)}
           />
         )}
+        {ctrl && groups && showCluster && (
+          <ClusterDialog ctrl={ctrl} group={groups} onClose={() => setShowCluster(false)} onToast={showToast} />
+        )}
+        {ctrl && tree && showTree && (
+          <TreePanel ctrl={ctrl} model={tree} group={groups} onClose={() => setShowTree(false)} onToast={showToast} />
+        )}
+        {ctrl && align && showAlign && (
+          <AlignPanel ctrl={ctrl} align={align} onClose={() => setShowAlign(false)} onToast={showToast} />
+        )}
+        {ctrl && structure && showStructure && (
+          <StructurePanel
+            ctrl={ctrl}
+            structure={structure}
+            hover={hover}
+            width={structureSize.w}
+            height={structureSize.h}
+            onResize={(w, h) => setStructureSize({ w, h })}
+            onClose={() => setShowStructure(false)}
+            onToast={showToast}
+          />
+        )}
         {dragging && <div className="dropzone">Drop a FASTA file to load</div>}
       </div>
+      {ctrl && conservation && showScores && (
+        <ScoresPanel ctrl={ctrl} model={conservation} group={groups} onClose={() => setShowScores(false)} />
+      )}
       {ctrl && <StatusBar ctrl={ctrl} onAbout={() => setAbout(true)} />}
       {ctrl && <ThemeSync ctrl={ctrl} />}
       {help && <HelpOverlay onClose={() => setHelp(false)} />}
