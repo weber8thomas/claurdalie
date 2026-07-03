@@ -1,17 +1,24 @@
 // Kalign compiled to WASM, run via biowasm Aioli.
 //
-// Aioli is loaded by a DYNAMIC import of its CDN ESM bundle, so the editor's
-// cold start is unaffected and there is NO npm dependency to bundle — the build
+// Aioli is loaded by a DYNAMIC import of its CDN bundle, so the editor's cold
+// start is unaffected and there is NO npm dependency to bundle — the build
 // stays clean and the app stays offline-safe. Aioli runs kalign in its own Web
 // Worker, single-threaded, which works fine with crossOriginIsolated=false (we
 // never set COOP/COEP). If the CDN/module can't be reached, every failure maps
 // to AlignError('unavailable') so the panel can tell the user to try elsewhere.
+//
+// NOTE: biowasm's v3 `aioli.js` is a UMD/IIFE bundle, not an ESM module — it
+// has no `export`, and importing it runs the IIFE which assigns `globalThis.Aioli`.
+// So the constructor must be read from `default` (if the CDN ever ships ESM),
+// then `Aioli` on the namespace, then the global. Reading only `.default`
+// yields `undefined`, and `new undefined()` is what produced the old
+// "Kalign WASM failed to initialize" error.
 
 import { parseFasta } from '../core/io/fasta'
 import type { Aligner, AlignInput, AlignedSeq, AlignOptions } from './types'
 import { AlignError } from './types'
 
-/** Aioli v3 ESM bundle. */
+/** Aioli v3 bundle (UMD; importing it assigns `globalThis.Aioli`). */
 const AIOLI_CDN = 'https://biowasm.com/cdn/v3/aioli.js'
 const MAX_SEQUENCES = 500
 
@@ -60,9 +67,13 @@ export class AioliKalignAligner implements Aligner {
         console.error('[kalign] failed to load Aioli from', AIOLI_CDN, e)
         throw new AlignError('unavailable', `Could not load the Kalign module — ${reason(e)}`)
       }
-      // 2. Resolve the constructor (default / named / the module itself).
+      // 2. Resolve the constructor. biowasm's v3 bundle is UMD, not ESM: it has
+      //    no `export`, and importing it runs the IIFE which assigns
+      //    globalThis.Aioli — so the global must be checked before falling back
+      //    to the module namespace itself. Reading only `.default` yields
+      //    undefined, which is what produced the old "failed to initialize".
       const m = mod as { default?: unknown; Aioli?: unknown }
-      const ctor = (m?.default ?? m?.Aioli ?? mod) as AioliCtor
+      const ctor = (m?.default ?? m?.Aioli ?? (globalThis as { Aioli?: unknown }).Aioli ?? mod) as AioliCtor
       if (typeof ctor !== 'function') {
         console.error('[kalign] Aioli module has no constructor export', mod)
         throw new AlignError('unavailable', 'Kalign module loaded but exposed no Aioli constructor')

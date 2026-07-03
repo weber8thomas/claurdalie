@@ -91,10 +91,21 @@ export class EbiMafftAligner implements Aligner {
   }
 
   private async fetchResult(jobId: string, signal?: AbortSignal): Promise<string> {
-    const res = await this.request(`${this.base}/result/${jobId}/aln-fasta`, {
+    // MAFFT's result-type identifier for the aligned FASTA is `fa` (the Seqret
+    // conversion, labelled "The alignment in FASTA format"). NOT `aln-fasta` —
+    // that renderer belongs to other tools (e.g. Clustal Omega) and MAFFT
+    // rejects it with "Requested renderer 'aln-fasta' not available". `out`
+    // (MAFFT's native output, also FASTA) is the fallback if `fa` is absent.
+    let res = await this.request(`${this.base}/result/${jobId}/fa`, {
       headers: { Accept: 'text/plain' },
       signal,
     })
+    if (!res.ok) {
+      res = await this.request(`${this.base}/result/${jobId}/out`, {
+        headers: { Accept: 'text/plain' },
+        signal,
+      })
+    }
     if (!res.ok) throw new AlignError('network', `EBI result returned HTTP ${res.status}`)
     return res.text()
   }
