@@ -1,7 +1,7 @@
 import { ALPHABET_SIZE, GAP_CODE } from '../core/alphabet'
 import { residueOf } from '../core/AlignmentStore'
 import type { AlignmentStore } from '../core/AlignmentStore'
-import type { ColumnStatsCache } from '../core/stats/ColumnStats'
+import type { ColumnStats, ColumnStatsCache } from '../core/stats/ColumnStats'
 import { toCss, type ColorScheme, type RGB } from '../color/scheme'
 import { GlyphAtlas } from './GlyphAtlas'
 import { LIGHT_CANVAS, type CanvasTheme } from './theme'
@@ -59,6 +59,9 @@ export class GridRenderer {
   private blockCanvas?: HTMLCanvasElement
   private blockCtx?: CanvasRenderingContext2D
   private blockImage?: ImageData
+  private blockColTable?: Uint32Array
+  // Reused color-scheme context to avoid per-cell allocation in block mode.
+  private bgCtx: { code: number; col: number; stats: ColumnStats | null } = { code: 0, col: 0, stats: null }
 
   // view state (mutated imperatively)
   scrollX = 0
@@ -421,19 +424,12 @@ export class GridRenderer {
     const img = this.blockImage
     const buf = new Uint32Array(img.data.buffer)
 
-    // Per-code color table (packed) for the current scheme; gaps = grid bg.
     const gridU32 = packABGR(this.theme.gridBg)
-    const table = new Uint32Array(ALPHABET_SIZE)
-    table[GAP_CODE] = gridU32
-    for (let code = 1; code < ALPHABET_SIZE; code++) {
-      const c = this.scheme.bg({ code, col: 0, stats: null })
-      table[code] = c == null ? gridU32 : packABGR(c)
-    }
-
     const cw = this.cellW
     const ch = this.cellH
     const rows = this.store.height
     const cols = this.store.width
+    const K = ALPHABET_SIZE
     // Map each pixel to a column once (incremental — no per-pixel divide).
     const colAt = new Int32Array(W)
     let cf = this.scrollX / cw
@@ -443,20 +439,68 @@ export class GridRenderer {
       colAt[px] = c < cols ? c : -1
       cf += cstep
     }
-    let rf = this.scrollY / ch
     const rstep = 1 / ch
-    for (let py = 0; py < H; py++) {
-      const r = rf | 0
-      rf += rstep
-      const base = py * W
-      if (r >= rows) {
-        buf.fill(gridU32, base, base + W)
-        continue
-      }
-      const row = this.store.getRow(this.store.rowIdAt(r))
+
+    if (this.scheme.dynamic) {
+      // Consensus-gated coloring, consistent with the zoomed-in view: a per
+      // pixel-column color table built from cached column stats.
+      if (!this.blockColTable || this.blockColTable.length < W * K) this.blockColTable = new Uint32Array(W * K)
+      const colTable = this.blockColTable
+      const cx = this.bgCtx
       for (let px = 0; px < W; px++) {
-        const c = colAt[px]
-        buf[base + px] = c < 0 ? gridU32 : table[residueOf(row, c)]
+        const col = colAt[px]
+        if (col < 0) continue
+        const base = px * K
+        cx.col = col
+        cx.stats = this.stats.get(col)
+        colTable[base + GAP_CODE] = gridU32
+        for (let code = 1; code < K; code++) {
+          cx.code = code
+          const c = this.scheme.bg(cx)
+          colTable[base + code] = c == null ? gridU32 : packABGR(c)
+        }
+      }
+      let rf = this.scrollY / ch
+      for (let py = 0; py < H; py++) {
+        const r = rf | 0
+        rf += rstep
+        const rowBase = py * W
+        if (r >= rows) {
+          buf.fill(gridU32, rowBase, rowBase + W)
+          continue
+        }
+        const row = this.store.getRow(this.store.rowIdAt(r))
+        for (let px = 0; px < W; px++) {
+          const col = colAt[px]
+          buf[rowBase + px] = col < 0 ? gridU32 : colTable[px * K + residueOf(row, col)]
+        }
+      }
+    } else {
+      // Static scheme: one column-independent color per residue code.
+      const table = new Uint32Array(K)
+      table[GAP_CODE] = gridU32
+      const cx = this.bgCtx
+      cx.col = 0
+      cx.stats = null
+      for (let code = 1; code < K; code++) {
+        cx.code = code
+        const c = this.scheme.bg(cx)
+        table[code] = c == null ? gridU32 : packABGR(c)
+      }
+      let rf = this.scrollY / ch
+      for (let py = 0; py < H; py++) {
+        const r = rf | 0
+        rf += rstep
+        const base = py * W
+        if (r >= rows) {
+          buf.fill(gridU32, base, base + W)
+          continue
+        }
+        const row = this.store.getRow(this.store.rowIdAt(r))
+        for (let px = 0; px < W; px++) {
+          const c = colAt[px]
+          buf[base + px] = c < 0 ? gridU32 : table[residueOf(row, c)]
+        }
       }
     }
     bctx.putImageData(img, 0, 0)
