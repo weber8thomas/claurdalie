@@ -30,6 +30,10 @@ jobs:
       # SPA fallback so deep links resolve on Pages.
       - run: cp dist/index.html dist/404.html
       - uses: actions/configure-pages@v5
+        with:
+          # Auto-enable Pages with "GitHub Actions" as the source if it isn't
+          # already — fixes persistent "Deployment failed, try again later".
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
