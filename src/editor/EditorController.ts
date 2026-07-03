@@ -389,20 +389,47 @@ export class EditorController {
     this.bump()
   }
 
+  /** Compute the order that results from moving the selected rows to slot `to`. */
+  private movedOrder(base: number[], to: number): { next: number[]; insertAt: number; count: number } | null {
+    const sel = this.renderer.selectedRowIds
+    if (!sel.size) return null
+    const selIds = base.filter((id) => sel.has(id)) // relative order preserved
+    const remaining = base.filter((id) => !sel.has(id))
+    let insertAt = 0
+    for (let i = 0; i < to && i < base.length; i++) if (!sel.has(base[i])) insertAt++
+    const next = [...remaining.slice(0, insertAt), ...selIds, ...remaining.slice(insertAt)]
+    return { next, insertAt, count: selIds.length }
+  }
+
+  /** Live drag preview relative to a fixed base order — no undo entry. */
+  previewReorderTo(base: number[], to: number): void {
+    const m = this.movedOrder(base, to)
+    if (!m) return
+    this.store.setOrder(m.next)
+    this.renderer.markDirty()
+  }
+  /** Commit the previewed order (current) as one undo entry relative to `base`. */
+  commitReorderFrom(base: number[]): void {
+    const after = this.store.orderSnapshot()
+    if (after.length === base.length && after.every((id, i) => id === base[i])) return
+    this.store.setOrder(base) // reset, then apply as a command for correct undo/redo
+    this.renderer.selection = null
+    this.undo.do(new ReorderBlockCommand(base, after))
+  }
+  /** Abort a drag preview, restoring the pre-drag order. */
+  cancelReorder(base: number[]): void {
+    this.store.setOrder(base)
+    this.renderer.markDirty()
+  }
+
   /** Move all selected sequences (contiguous or not) to `to`, packed, kept selected. */
   moveSelectedRows(to: number): void {
-    const sel = this.renderer.selectedRowIds
-    if (!sel.size) return
-    const order = this.store.orderSnapshot()
-    const selIds = order.filter((id) => sel.has(id)) // relative order preserved
-    const remaining = order.filter((id) => !sel.has(id))
-    let insertAt = 0
-    for (let i = 0; i < to && i < order.length; i++) if (!sel.has(order[i])) insertAt++
-    const next = [...remaining.slice(0, insertAt), ...selIds, ...remaining.slice(insertAt)]
-    if (next.every((id, i) => id === order[i])) return // no-op
+    const base = this.store.orderSnapshot()
+    const m = this.movedOrder(base, to)
+    if (!m || m.next.every((id, i) => id === base[i])) return
     this.renderer.selection = null
-    this.undo.do(new ReorderBlockCommand(order, next))
-    this.ensureRowVisibleRange(insertAt, insertAt + selIds.length - 1)
+    this.undo.do(new ReorderBlockCommand(base, m.next))
+    this.ensureRowVisibleRange(m.insertAt, m.insertAt + m.count - 1)
   }
   setHover(h: CellPos | null): void {
     this.renderer.hover = h

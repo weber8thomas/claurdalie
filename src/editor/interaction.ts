@@ -29,7 +29,7 @@ export function attachInteraction(
     | { kind: 'none' }
     | { kind: 'select'; anchor: { row: number; col: number } }
     | { kind: 'shift'; ids: number[]; startCol: number; applied: number; key: string }
-    | { kind: 'reorder'; from: number; moved: boolean }
+    | { kind: 'reorder'; from: number; moved: boolean; before: number[] }
     | { kind: 'scroll'; bar: ScrollbarHit; grab: number }
   let drag: Drag = { kind: 'none' }
   let lastHoverKey: string | null = null
@@ -76,10 +76,8 @@ export function attachInteraction(
       else if (!ctrl.isRowSelected(hit.row)) ctrl.selectRowSingle(hit.row)
       // Moving the selected sequences is an edit — edit mode only.
       if (ctrl.cursorMode && ctrl.isRowSelected(hit.row)) {
-        drag = { kind: 'reorder', from: hit.row, moved: false }
-        r.dropIndex = hit.row
+        drag = { kind: 'reorder', from: hit.row, moved: false, before: ctrl.store.orderSnapshot() }
         canvas.style.cursor = 'grabbing'
-        r.markDirty()
       }
       return
     }
@@ -167,23 +165,26 @@ export function attachInteraction(
       }
     } else if (drag.kind === 'reorder') {
       drag.moved = true
-      r.dropIndex = r.dropIndexAt(y)
-      r.markDirty()
+      // Live preview: reorder the sequences under the cursor without committing.
+      ctrl.previewReorderTo(drag.before, r.dropIndexAt(y))
     }
   }
 
   const onPointerUp = (e: PointerEvent) => {
     if (drag.kind === 'reorder') {
-      const to = r.dropIndex ?? drag.from
-      r.dropIndex = null
       canvas.style.cursor = 'grab'
-      if (drag.moved) ctrl.moveSelectedRows(to) // a plain click only selects
+      if (drag.moved) ctrl.commitReorderFrom(drag.before) // a plain click only selects
     }
     if (drag.kind === 'select' && e) {
       // A pure click (no movement) leaves just the cursor, no selection box.
       const sel = r.selection ? norm(r.selection) : null
       if (sel && sel.r0 === sel.r1 && sel.c0 === sel.c1) ctrl.setSelection(null)
     }
+    drag = { kind: 'none' }
+  }
+
+  const onPointerCancel = () => {
+    if (drag.kind === 'reorder' && drag.moved) ctrl.cancelReorder(drag.before)
     drag = { kind: 'none' }
   }
 
@@ -353,6 +354,7 @@ export function attachInteraction(
   canvas.addEventListener('pointerdown', onPointerDown)
   canvas.addEventListener('pointermove', onPointerMove)
   canvas.addEventListener('pointerup', onPointerUp)
+  canvas.addEventListener('pointercancel', onPointerCancel)
   canvas.addEventListener('pointerleave', onPointerLeave)
   canvas.addEventListener('wheel', onWheel, { passive: false })
   window.addEventListener('keydown', onKeyDown)
@@ -362,6 +364,7 @@ export function attachInteraction(
     canvas.removeEventListener('pointerdown', onPointerDown)
     canvas.removeEventListener('pointermove', onPointerMove)
     canvas.removeEventListener('pointerup', onPointerUp)
+    canvas.removeEventListener('pointercancel', onPointerCancel)
     canvas.removeEventListener('pointerleave', onPointerLeave)
     canvas.removeEventListener('wheel', onWheel)
     window.removeEventListener('keydown', onKeyDown)
