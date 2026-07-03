@@ -16,7 +16,10 @@ import { SnapshotBar } from './ui/SnapshotBar'
 import { ScoresPanel } from './ui/ScoresPanel'
 import { ClusterDialog } from './ui/ClusterDialog'
 import { TreePanel } from './ui/TreePanel'
+import { AlignPanel } from './ui/AlignPanel'
+import { AlignController } from './align/AlignController'
 import { ProjectStore, type ProjectHost } from './project/ProjectStore'
+import { loadProject, saveProject } from './project/idb'
 import { ConservationModel } from './analysis/conservation/ConservationModel'
 import { GroupModel } from './analysis/cluster/GroupModel'
 import { TreeModel } from './tree/TreeModel'
@@ -38,11 +41,13 @@ export default function App() {
   const [showScores, setShowScores] = useState(() => loadPrefs().showScores ?? false)
   const [showCluster, setShowCluster] = useState(false)
   const [showTree, setShowTree] = useState(false)
+  const [showAlign, setShowAlign] = useState(false)
   const [structure, setStructure] = useState<StructureController | null>(null)
   const [project, setProject] = useState<ProjectStore | null>(null)
   const [conservation, setConservation] = useState<ConservationModel | null>(null)
   const [groups, setGroups] = useState<GroupModel | null>(null)
   const [tree, setTree] = useState<TreeModel | null>(null)
+  const [align, setAlign] = useState<AlignController | null>(null)
   const [minimapSize, setMinimapSize] = useState(() => {
     const p = loadPrefs()
     return { w: p.minimapW ?? 180, h: p.minimapH ?? 120 }
@@ -119,19 +124,53 @@ export default function App() {
     proj.register(treeModel)
     proj.register(viewSlice)
     proj.init('Original')
+
+    // Auto-persist the working project to IndexedDB (debounced), and restore any
+    // previously saved state on load. The seed above keeps the UI live while the
+    // async restore runs; the `restoring` guard stops the restore from re-saving.
+    let restoring = true
+    let saveTimer = 0
+    const scheduleSave = () => {
+      if (restoring) return
+      window.clearTimeout(saveTimer)
+      saveTimer = window.setTimeout(() => {
+        void proj.toFile().then(saveProject).catch(() => {})
+      }, 800)
+    }
+    const offProjSave = proj.subscribe(scheduleSave)
+    const offCtrlSave = ctrl.subscribe(scheduleSave)
+    void (async () => {
+      try {
+        const saved = await loadProject()
+        if (saved) await proj.fromFile(saved)
+      } catch {
+        // Corrupt / unreadable working state — keep the freshly seeded project.
+      } finally {
+        restoring = false
+      }
+    })()
+
+    const alignCtrl = new AlignController(ctrl, proj)
+
     setConservation(model)
     setGroups(groupModel)
     setTree(treeModel)
     setProject(proj)
+    setAlign(alignCtrl)
     return () => {
       offGroups()
+      offProjSave()
+      offCtrlSave()
+      window.clearTimeout(saveTimer)
       model.destroy()
       groupModel.destroy()
       treeModel.destroy()
+      alignCtrl.destroy()
       setConservation(null)
       setGroups(null)
       setTree(null)
       setProject(null)
+      setAlign(null)
     }
   }, [ctrl])
 
@@ -172,6 +211,7 @@ export default function App() {
           showScores={showScores}
           showCluster={showCluster}
           showTree={showTree}
+          showAlign={showAlign}
           tooltipEnabled={tooltipEnabled}
           onToggleLegend={() => setShowLegend((s) => !s)}
           onToggleMinimap={() => setShowMinimap((s) => !s)}
@@ -179,6 +219,7 @@ export default function App() {
           onToggleScores={() => setShowScores((s) => !s)}
           onToggleCluster={() => setShowCluster((s) => !s)}
           onToggleTree={() => setShowTree((s) => !s)}
+          onToggleAlign={() => setShowAlign((s) => !s)}
           onToggleTooltip={() => setTooltipEnabled((s) => !s)}
         />
       )}
@@ -205,6 +246,9 @@ export default function App() {
         )}
         {ctrl && tree && showTree && (
           <TreePanel ctrl={ctrl} model={tree} group={groups} onClose={() => setShowTree(false)} onToast={showToast} />
+        )}
+        {ctrl && align && showAlign && (
+          <AlignPanel ctrl={ctrl} align={align} onClose={() => setShowAlign(false)} onToast={showToast} />
         )}
         {ctrl && structure && showStructure && (
           <StructurePanel

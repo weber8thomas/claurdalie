@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useRef, useSyncExternalStore } from 'react'
 import type { ProjectStore } from '../project/ProjectStore'
 
 interface Props {
@@ -8,8 +8,9 @@ interface Props {
 
 /**
  * Ordalie's Snapshot Bar: a combobox to juggle between analytical instances,
- * plus New / Overwrite / Rename / Delete. Switching restores the exact state of
- * the alignment and every registered sub-module (see ProjectStore).
+ * plus New / Overwrite / Rename / Delete, and Export/Import of the whole project
+ * as a .clproj file. Switching restores the exact state of the alignment and
+ * every registered sub-module (see ProjectStore).
  */
 export function SnapshotBar({ project, onToast }: Props) {
   const key = useSyncExternalStore(
@@ -18,6 +19,32 @@ export function SnapshotBar({ project, onToast }: Props) {
   )
   const list = project.list()
   const active = list.find((i) => i.active)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const onExport = async () => {
+    try {
+      const bytes = await project.toFile()
+      const blob = new Blob([bytes as BlobPart], { type: 'application/gzip' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'project.clproj'
+      a.click()
+      URL.revokeObjectURL(url)
+      onToast?.('Exported project.clproj')
+    } catch {
+      onToast?.('Export failed')
+    }
+  }
+  const onImport = async (file: File) => {
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      await project.fromFile(bytes)
+      onToast?.(`Imported ${file.name}`)
+    } catch {
+      onToast?.('Import failed — not a valid .clproj file')
+    }
+  }
 
   return (
     <div className="snapshot-bar" data-rev={key}>
@@ -75,6 +102,29 @@ export function SnapshotBar({ project, onToast }: Props) {
       >
         Delete
       </button>
+
+      <div className="snapshot-spacer" />
+      <button className="snapshot-btn" title="Export the whole project (.clproj)" onClick={() => void onExport()}>
+        Export
+      </button>
+      <button
+        className="snapshot-btn"
+        title="Import a project (.clproj)"
+        onClick={() => fileRef.current?.click()}
+      >
+        Import
+      </button>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".clproj"
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) void onImport(f)
+          e.target.value = ''
+        }}
+      />
     </div>
   )
 }

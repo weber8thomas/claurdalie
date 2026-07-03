@@ -31,6 +31,7 @@ interface Props {
   showScores: boolean
   showCluster: boolean
   showTree: boolean
+  showAlign: boolean
   tooltipEnabled: boolean
   onToggleLegend: () => void
   onToggleMinimap: () => void
@@ -38,6 +39,7 @@ interface Props {
   onToggleScores: () => void
   onToggleCluster: () => void
   onToggleTree: () => void
+  onToggleAlign: () => void
   onToggleTooltip: () => void
 }
 
@@ -60,6 +62,7 @@ export function Toolbar({
   showScores,
   showCluster,
   showTree,
+  showAlign,
   tooltipEnabled,
   onToggleLegend,
   onToggleMinimap,
@@ -67,6 +70,7 @@ export function Toolbar({
   onToggleScores,
   onToggleCluster,
   onToggleTree,
+  onToggleAlign,
   onToggleTooltip,
 }: Props) {
   const snap = useEditorSnapshot(ctrl)
@@ -215,6 +219,9 @@ export function Toolbar({
         </button>
         <button className={'icon' + (showTree ? ' active' : '')} onClick={onToggleTree} title="Phylogenetic tree">
           <Icon name="tree" />
+        </button>
+        <button className={'icon' + (showAlign ? ' active' : '')} onClick={onToggleAlign} title="Re-align sequences">
+          <Icon name="align" />
         </button>
         <button
           className={'icon' + (showStructure ? ' active' : '')}

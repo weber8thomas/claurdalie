@@ -787,6 +787,10 @@ kbd {
   color: #ef5d6c;
   border-color: #ef5d6c;
 }
+.snapshot-spacer {
+  flex: 1 1 8px;
+  min-width: 8px;
+}
 
 /* ---- conservation scores panel ----------------------------------------- */
 .scores-panel {
@@ -870,6 +874,98 @@ kbd {
   padding: 10px 12px;
   z-index: 40;
   font-size: 12px;
+}
+
+/* Re-align panel (mirrors the cluster dialog's floating style). */
+.align-panel {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  width: 260px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 10px 12px;
+  z-index: 40;
+  font-size: 12px;
+}
+.align-chrome {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.align-title {
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+.align-chrome .select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.align-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+}
+.align-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.align-btn {
+  font-family: var(--font);
+  font-size: 12px;
+  height: 30px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background var(--dur), border-color var(--dur);
+}
+.align-btn:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--border-strong);
+}
+.align-btn.primary {
+  border-color: #2bb3a3;
+  color: #2bb3a3;
+}
+.align-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.align-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.align-cancel {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 8px;
+}
+.align-error {
+  color: #ef5d6c;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.align-note {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
 }
 .cluster-head {
   display: flex;

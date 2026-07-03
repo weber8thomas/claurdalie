@@ -20,6 +20,8 @@ import { buildSchemes, DEFAULT_SCHEME_ID } from '../color/schemes'
 import type { ColorScheme } from '../color/scheme'
 import { GridRenderer, type CellPos, type Selection } from '../render/GridRenderer'
 import { DARK_CANVAS, LIGHT_CANVAS } from '../render/theme'
+import { alignmentEdits } from '../align/apply'
+import type { AlignedSeq } from '../align/types'
 
 const MONO = "'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace"
 
@@ -649,6 +651,16 @@ export class EditorController {
     const before = this.store.orderSnapshot()
     if (newOrder.length === before.length && newOrder.every((id, i) => id === before[i])) return
     this.undo.do(new ReorderBlockCommand(before, newOrder))
+  }
+
+  /**
+   * Apply a fresh alignment layout (from an Aligner) to the matching rows as one
+   * undoable edit. Residues are invariant — only gaps move (see align/apply.ts).
+   */
+  applyAlignment(aligned: AlignedSeq[]): void {
+    this.undo.do(alignmentEdits(this.store, aligned))
+    this.renderer.selection = null
+    this.bump()
   }
 
   /** Optional per-row group color, drawn as a gutter stripe by the renderer. */

@@ -33,6 +33,7 @@ const PATHS: Record<string, string[]> = {
   chart: ['M3 3v18h18', 'M7 16v-5', 'M12 16V8', 'M17 16v-8'],
   group: ['M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2', 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8', 'M23 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'],
   tree: ['M12 3v6', 'M12 15v6', 'M6 21v-4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v4', 'M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6', 'M6 24a2 2 0 1 0 0-4 2 2 0 0 0 0 4', 'M18 24a2 2 0 1 0 0-4 2 2 0 0 0 0 4'],
+  align: ['M3 6h18', 'M3 12h11', 'M3 18h15'],
 }
 
 export function Icon({ name, size = 16 }: { name: keyof typeof PATHS | string; size?: number }) {

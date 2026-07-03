@@ -39,6 +39,13 @@ snapshot-driven exploration of an alignment's informational content, in the brow
 - **Instances (snapshots)** — an always-visible combobox to juggle parallel analytical
   hypotheses; switching an instance restores the *exact* state of the alignment **and** every
   sub-module (shown scores, clustering/groups, tree, view, selection). Fork / overwrite / rename / delete
+- **Project persistence** — export/import the whole project (every snapshot + module state)
+  as a gzipped **`.clproj`** file (typed arrays stored as base64 + gap-RLE, no dependency);
+  the working project auto-saves to **IndexedDB** and is restored on reload
+- **Re-alignment** — re-align the selected sequences behind a pluggable **`Aligner`**: **Kalign**
+  compiled to WASM (biowasm/Aioli, dynamically imported, runs off-thread, no server) or the
+  optional online **MAFFT via EMBL-EBI**. Re-align in place or **into a new snapshot** (the
+  original topology is preserved) as a single undoable edit; degrades gracefully offline
 - **Light / dark** theme, accessible controls, built-in demo + heavy stress datasets
 
 ## Getting started
@@ -90,7 +97,12 @@ tree/        neighbor-joining + bootstrap + Newick/NEXUS I/O + dendrogram/radial
 workers/     numerics Web Worker + typed RPC (Transferables, no SharedArrayBuffer so it
              works on GitHub Pages), with a main-thread fallback for offline/SSR
 project/     Snapshot spine: SerializableModule contract, ProjectStore (instant instance
-             switching), each analysis module serializes its state into the active snapshot
+             switching), each analysis module serializes its state into the active snapshot;
+             .clproj (de)serialization (gzip via CompressionStream, gap-RLE) + IndexedDB
+align/       pluggable Aligner (mirrors StructureSource): Kalign-WASM via Aioli (dynamic CDN
+             import) + optional EBI MAFFT; degap→regap apply as one undoable edit; controller
+variant/     mutation-effect SEAM only — Variant + VariantEffectSource + VariantContext types
+             and an (empty) registry; no scorer yet
 ```
 
 Design rule #1: **React owns the chrome, never a residue.** The alignment surface is one
@@ -104,12 +116,13 @@ Static build deployed to **GitHub Pages** via `.github/workflows/deploy.yml`
 ## Roadmap
 
 Reimplementing Ordalie's analysis layer, client-side and lightweight. Shipped: conservation +
-the snapshot/instance spine (v0.4), clustering & groups (v0.5), and the phylogenetic tree
-(v0.6). Next, in dependency order:
+the snapshot/instance spine (v0.4), clustering & groups (v0.5), the phylogenetic tree (v0.6),
+and **persistence + re-align (v0.7)**. Next, in dependency order:
 
-- **v0.7 — Persistence + re-align**: `.clproj` project export/import (IndexedDB working
-  state); in-browser re-alignment via kalign (biowasm/Aioli) behind a pluggable `Aligner`,
-  with an optional exact-MAFFT-via-EBI provider; variant/mutation-effect seam
+- **v0.7 — Persistence + re-align** ✅ *shipped*: `.clproj` project export/import (IndexedDB
+  working state); in-browser re-alignment via Kalign (biowasm/Aioli) behind a pluggable
+  `Aligner`, with an optional MAFFT-via-EBI provider; variant/mutation-effect seam (types +
+  registry)
 - **v0.8 — Lighter tools**: Identity, GCG FindPatterns motif search, Snapshot Overview, Barcode
 
 Deferred infra: WebGL/PixiJS renderer + MSDF atlas (behind the existing `Renderer` interface)

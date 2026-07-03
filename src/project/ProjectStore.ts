@@ -9,6 +9,13 @@
 // so no analytical state is lost when juggling between instances.
 
 import type { SnapshotSequence, SerializableModule, Snapshot, SnapshotInfo } from './types'
+import {
+  encodeProject,
+  decodeProject,
+  gzipJson,
+  gunzipJson,
+  type SerializedProject,
+} from './serialize'
 
 /**
  * The minimal editor surface ProjectStore needs — decoupled from the full
@@ -151,6 +158,37 @@ export class ProjectStore {
   overwrite(): void {
     this.captureActive()
     this.emit()
+  }
+
+  // ---- persistence (the .clproj-equivalent) -------------------------------
+
+  /** Serialize the whole project (captures live state first). */
+  export(): SerializedProject {
+    this.captureActive()
+    return encodeProject(this.snapshots, this.activeId, this.nextId)
+  }
+
+  /** Replace the project with a serialized one and restore its active snapshot. */
+  import(sp: SerializedProject): void {
+    const { snapshots, activeSnapshotId, nextId } = decodeProject(sp)
+    if (!snapshots.length) throw new Error('Project has no snapshots')
+    this.snapshots = snapshots
+    this.nextId = Math.max(nextId, ...snapshots.map((s) => s.id + 1))
+    const active = snapshots.find((s) => s.id === activeSnapshotId) ?? snapshots[0]
+    this.activeId = active.id
+    this.restore(active)
+    this.emit()
+  }
+
+  /** Gzipped .clproj bytes for download / IndexedDB. */
+  async toFile(): Promise<Uint8Array> {
+    return gzipJson(this.export())
+  }
+
+  /** Load a project from gzipped .clproj bytes. */
+  async fromFile(bytes: Uint8Array): Promise<void> {
+    const sp = await gunzipJson<SerializedProject>(bytes)
+    this.import(sp)
   }
 
   private uniqueName(base: string): string {
