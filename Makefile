@@ -21,7 +21,7 @@ export BANNER
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev build preview test test-watch typecheck check clean distclean
+.PHONY: help install dev build preview run test test-watch typecheck check clean distclean
 
 help: ## Show this help
 	@printf '$(MAGENTA)%s$(RESET)\n' "$$BANNER"
@@ -38,6 +38,9 @@ build: node_modules ## Type-check and build for production (outputs to dist/)
 	$(NPM) run build
 
 preview: node_modules ## Preview the production build locally
+	$(NPM) run preview
+
+run: build ## Build the latest and serve it locally
 	$(NPM) run preview
 
 test: node_modules ## Run the test suite once
