@@ -18,19 +18,32 @@ snapshot-driven exploration of an alignment's informational content, in the brow
 - **Keyboard-first** — cursor/edit mode, gap edits, sequence shift, navigation, zoom
   (press `?` in the app for the full list)
 - **FASTA** import (button · drag-drop · works with `.fasta/.fa/.faa/.aln`) and export
-- **Minimap** overview with draggable viewport, column ruler, sequence gutter, status bar
+- **Snapshot Overview** (minimap) — a downsampled schematic of the whole alignment with a
+  draggable/click-to-jump viewport box, a selectable overlay (**residues / conservation /
+  clusters**), and +/− zoom of the grid scale; column ruler, sequence gutter, status bar
 - **3D structure panel** (opt-in) — fold a reference sequence live via ESMFold or load a
   local PDB, colored by pLDDT confidence; hover a column to highlight the residue in 3D
-  and click a residue to jump the alignment cursor. Runs in a separate, lazy-loaded WebGL
-  surface so the alignment renderer stays untouched.
+  and click a residue to jump the alignment cursor. Load several structures and **show/hide
+  each independently** (toggle a model off without discarding it). Runs in a separate,
+  lazy-loaded WebGL surface so the alignment renderer stays untouched.
 - **Conservation analysis** — per-column scores computed off the main thread in a Web
   Worker: **Shannon**, **Jensen-Shannon** (vs BLOSUM62 background), **Mean-Distances**
   (ClustalX), **Vector Norm**, **BILD**, **Liu**, **Threshold**, and a **Multi** consensus.
-  The scores panel switches between two views: a **Tracks** (Jalview-style) view that stacks
-  each selected method as its own labeled histogram row (with per-group lines overlaid), and a
-  **Clusters** (Cluspack-style) view that clusters each column by its score into
-  **well- / moderately- / poorly-conserved** classes and paints the alignment as colored
+  The **resizable** scores panel switches between two views: a **Tracks** (Jalview-style) view
+  that stacks each selected method as its own labeled histogram row (with per-group lines
+  overlaid), and a **Clusters** (Cluspack-style) view that clusters each column by its score
+  into **well- / moderately- / poorly-conserved** classes and paints the alignment as colored
   conservation bands, with a per-class column tally
+- **Sequence identity** — pairwise %-identity over all or the selected sequences (Pairwise/
+  Global gap handling): summary stats (mean, std-dev, most-similar / most-distant pairs) and
+  a two-sequence picker showing %-identity and ungapped lengths; within- vs outside-cluster
+  neighbours when a grouping is active
+- **Motif search** (GCG **FindPatterns**) — literal residues, ambiguity codes (`B Z X`),
+  `()` groups with `{m,n}` repeats, comma-OR, `~` negation, and `<`/`>` anchors, compiled to
+  a matcher over each sequence; matches are drawn as a high-contrast red-on-dark overlay on
+  the grid with **Find Next / Prev** that scrolls the view
+- **Barcode** — one lane per cluster showing a column-aligned "barcode" of per-group
+  conservation, gap density, and any active motif feature
 - **Clustering & groups** — group sequences by identity / length / hydrophobicity / pI /
   composition using **hierarchic (Secator)**, **k-means**, **density-peaks (DPC)**, or
   **Gaussian mixture + AIC/BIC** (auto-selecting the number of groups); groups reorder the
@@ -121,13 +134,17 @@ Static build deployed to **GitHub Pages** via `.github/workflows/deploy.yml`
 
 Reimplementing Ordalie's analysis layer, client-side and lightweight. Shipped: conservation +
 the snapshot/instance spine (v0.4), clustering & groups (v0.5), the phylogenetic tree (v0.6),
-and **persistence + re-align (v0.7)**. Next, in dependency order:
+**persistence + re-align (v0.7)**, and **lighter tools (v0.8)**. Next, in dependency order:
 
 - **v0.7 — Persistence + re-align** ✅ *shipped*: `.clproj` project export/import (IndexedDB
   working state); in-browser re-alignment via Kalign (biowasm/Aioli) behind a pluggable
   `Aligner`, with an optional MAFFT-via-EBI provider; variant/mutation-effect seam (types +
   registry)
-- **v0.8 — Lighter tools**: Identity, GCG FindPatterns motif search, Snapshot Overview, Barcode
+- **v0.8 — Lighter tools** ✅ *shipped*: pairwise **sequence identity** (summary + pairwise
+  picker, within/outside-cluster neighbours), **GCG FindPatterns motif search** (compiled to
+  a matcher with a high-contrast grid overlay + Find Next), the **Snapshot Overview**
+  (residue/conservation/cluster overlays + zoom on the minimap), and the per-cluster
+  **Barcode**; plus per-model 3D show/hide and a resizable conservation panel
 
 Deferred infra: WebGL/PixiJS renderer + MSDF atlas (behind the existing `Renderer` interface)
 and Rust→WASM numeric kernels, adopted where profiling on very large alignments shows a ceiling.

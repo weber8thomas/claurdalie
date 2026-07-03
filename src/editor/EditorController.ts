@@ -684,6 +684,17 @@ export class EditorController {
     this.bump()
   }
 
+  /** Motif match overlay for the grid (set by MotifModel; null clears it). */
+  setMatchOverlay(o: GridRenderer['matchOverlay']): void {
+    this.renderer.matchOverlay = o
+    this.renderer.markDirty()
+  }
+
+  /** Center a cell in the grid viewport (motif Find Next). */
+  scrollCellIntoView(row: number, col: number): void {
+    this.renderer.scrollCellIntoView(row, col)
+  }
+
   undoAction(): void {
     this.undo.undo()
   }

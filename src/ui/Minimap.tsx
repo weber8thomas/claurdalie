@@ -1,30 +1,60 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { EditorController } from '../editor/EditorController'
+import type { ConservationModel } from '../analysis/conservation/ConservationModel'
+import type { GroupModel } from '../analysis/cluster/GroupModel'
 import { useEditorSnapshot } from './useEditor'
 import { GAP_CODE } from '../core/alphabet'
+import { countColumn, newCounts } from '../analysis/conservation/columnCounts'
 
 const MIN_W = 120
 const MIN_H = 80
 const MAX_W = 460
 const MAX_H = 340
 
+type Overlay = 'residues' | 'conservation' | 'clusters'
+
 interface Props {
   ctrl: EditorController
   width: number
   height: number
+  conservation?: ConservationModel | null
+  group?: GroupModel | null
   onResize: (w: number, h: number) => void
   onClose: () => void
 }
 
-export function Minimap({ ctrl, width, height, onResize, onClose }: Props) {
+/** #rrggbb → [r,g,b]. */
+function hexRGB(hex: string): [number, number, number] {
+  const h = hex.replace('#', '')
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+}
+
+/**
+ * Snapshot Overview (Ordalie §4.1): a downsampled schematic of the whole
+ * alignment with a selectable overlay (residues / conservation / clusters), a
+ * +/- zoom of the main grid scale, and a draggable viewport box that both shows
+ * and drives the main window position.
+ */
+export function Minimap({ ctrl, width, height, conservation, group, onResize, onClose }: Props) {
   const snap = useEditorSnapshot(ctrl)
   const contentVersion = ctrl.getContentVersion()
+  const [overlay, setOverlay] = useState<Overlay>('residues')
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const offRef = useRef<HTMLCanvasElement | null>(null)
   const W = width
   const H = height
 
-  // Rebuild the downsampled heatmap when data / scheme / theme / size change.
+  // Rebuild offscreen when grouping/conservation change too (for those overlays).
+  const groupsSig = useSyncExternalStore(
+    (fn) => group?.subscribe(fn) ?? (() => {}),
+    () => group?.clusterInfos().map((c) => `${c.id}:${c.size}`).join(',') ?? '',
+  )
+  const consSig = useSyncExternalStore(
+    (fn) => conservation?.subscribe(fn) ?? (() => {}),
+    () => conservation?.shownMethods().join(',') ?? '',
+  )
+
+  // Rebuild the downsampled heatmap when data / scheme / theme / size / overlay change.
   useEffect(() => {
     const off = document.createElement('canvas')
     off.width = W
@@ -35,13 +65,29 @@ export function Minimap({ ctrl, width, height, onResize, onClose }: Props) {
     const { store } = ctrl
     const rows = store.height
     const cols = store.width
-    // Use the ACTIVE scheme with per-column stats so conservation-based color
-    // changes (e.g. ClustalX after a shift) show up in the overview too.
     const scheme = ctrl.scheme()
     const dynamic = scheme.dynamic
     const bg = snap.dark ? [26, 27, 32] : [255, 255, 255]
-    const present = snap.dark ? [90, 96, 110] : [176, 182, 194] // residue present but not colored
+    const present = snap.dark ? [90, 96, 110] : [176, 182, 194]
     const cx = { code: 0, col: 0, stats: null as ReturnType<typeof ctrl.stats.get> | null }
+
+    // Precompute per-sampled-column conservation (threshold) when needed.
+    let consByX: Float32Array | null = null
+    if (overlay === 'conservation' && rows > 0 && cols > 0) {
+      consByX = new Float32Array(W)
+      const counts = newCounts()
+      for (let x = 0; x < W; x++) {
+        const col = Math.min(cols - 1, Math.floor((x / W) * cols))
+        counts.fill(0)
+        const total = countColumn((r) => store.residueAt(r, col), rows, counts)
+        let max = 0
+        for (let c = 1; c < counts.length; c++) if (counts[c] > max) max = counts[c]
+        consByX[x] = total > 0 ? max / total : NaN
+      }
+    }
+    const low = snap.dark ? [40, 44, 54] : [225, 228, 236]
+    const high = snap.dark ? [45, 212, 191] : [13, 148, 136]
+
     for (let y = 0; y < H; y++) {
       const row = rows > 0 ? Math.min(rows - 1, Math.floor((y / H) * rows)) : 0
       for (let x = 0; x < W; x++) {
@@ -51,6 +97,19 @@ export function Minimap({ ctrl, width, height, onResize, onClose }: Props) {
         let r: number, g: number, b: number
         if (code === GAP_CODE) {
           ;[r, g, b] = bg
+        } else if (overlay === 'clusters') {
+          const hex = group?.colorOfVisualRow(row) ?? null
+          if (hex) [r, g, b] = hexRGB(hex)
+          else [r, g, b] = present
+        } else if (overlay === 'conservation') {
+          const s = consByX ? consByX[x] : NaN
+          if (Number.isFinite(s)) {
+            r = Math.round(low[0] + (high[0] - low[0]) * s)
+            g = Math.round(low[1] + (high[1] - low[1]) * s)
+            b = Math.round(low[2] + (high[2] - low[2]) * s)
+          } else {
+            ;[r, g, b] = present
+          }
         } else {
           cx.code = code
           cx.col = col
@@ -74,7 +133,7 @@ export function Minimap({ ctrl, width, height, onResize, onClose }: Props) {
     offRef.current = off
     draw()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snap.rows, snap.cols, snap.schemeId, snap.dark, W, H, contentVersion])
+  }, [snap.rows, snap.cols, snap.schemeId, snap.dark, W, H, contentVersion, overlay, groupsSig, consSig])
 
   const draw = () => {
     const canvas = canvasRef.current
@@ -122,7 +181,12 @@ export function Minimap({ ctrl, width, height, onResize, onClose }: Props) {
     )
   }
 
-  // Corner handle (top-left) resizes; anchored bottom-right so it grows outward.
+  // +/- zoom the main grid scale (viewport box follows via the view listener).
+  const zoom = (factor: number) => {
+    const r = ctrl.renderer
+    r.zoomAt(factor, r.gridWidthPx / 2 + 156, r.gridHeightPx / 2 + 22)
+  }
+
   const startResize = (e: React.PointerEvent) => {
     e.stopPropagation()
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -143,12 +207,41 @@ export function Minimap({ ctrl, width, height, onResize, onClose }: Props) {
     window.addEventListener('pointerup', up)
   }
 
+  const OVERLAYS: { id: Overlay; label: string; enabled: boolean }[] = [
+    { id: 'residues', label: 'Res', enabled: true },
+    { id: 'conservation', label: 'Cons', enabled: true },
+    { id: 'clusters', label: 'Clust', enabled: !!group?.hasGroups() },
+  ]
+
   return (
     <div className="minimap" style={{ width: W, height: H }}>
       <div className="mm-resize" title="Resize" onPointerDown={startResize} />
-      <button className="mm-close" title="Hide minimap" onClick={onClose}>
+      <button className="mm-close" title="Hide overview" onClick={onClose}>
         ×
       </button>
+      <div className="mm-chrome">
+        <div className="mm-seg">
+          {OVERLAYS.map((o) => (
+            <button
+              key={o.id}
+              className={'mm-seg-btn' + (overlay === o.id ? ' active' : '')}
+              disabled={!o.enabled}
+              title={`${o.label} overlay`}
+              onClick={() => setOverlay(o.id)}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+        <div className="mm-zoom">
+          <button className="mm-seg-btn" title="Zoom out" onClick={() => zoom(1 / 1.3)}>
+            −
+          </button>
+          <button className="mm-seg-btn" title="Zoom in" onClick={() => zoom(1.3)}>
+            +
+          </button>
+        </div>
+      </div>
       <canvas
         ref={canvasRef}
         width={W}

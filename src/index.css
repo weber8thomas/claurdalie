@@ -1175,3 +1175,207 @@ kbd {
   background: var(--border);
   margin: 4px 6px;
 }
+
+/* ---- v0.8: motif search ------------------------------------------------- */
+.motif-panel {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  width: 300px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 10px 12px;
+  z-index: 40;
+  font-size: 12px;
+}
+.motif-input {
+  width: 100%;
+  font-family: var(--mono);
+}
+.motif-hint {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.motif-hint code {
+  font-family: var(--mono);
+  background: var(--panel-2);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+.motif-error {
+  color: #ef5d6c;
+  font-size: 11px;
+  margin: 4px 0;
+}
+.motif-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-family: var(--mono);
+}
+
+/* ---- v0.8: identity dialog --------------------------------------------- */
+.identity-modal {
+  width: min(560px, 92vw);
+}
+.identity-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.identity-controls .cluster-label {
+  margin-bottom: 0;
+}
+.identity-controls .btn {
+  margin-left: auto;
+}
+.identity-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.identity-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 9px;
+}
+.identity-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.identity-stat-val {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.identity-pair {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.identity-pair .select {
+  flex: 1;
+  min-width: 0;
+}
+.identity-vs {
+  color: var(--muted);
+  font-size: 11px;
+}
+.identity-pair-result {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.identity-muted,
+.identity-note {
+  color: var(--muted);
+  font-size: 11px;
+}
+.identity-note {
+  margin-top: 10px;
+  line-height: 1.4;
+}
+
+/* ---- v0.8: barcode panel ----------------------------------------------- */
+.barcode-sub {
+  color: var(--muted);
+  font-size: 10px;
+  font-family: var(--mono);
+  margin-left: 4px;
+}
+
+/* ---- v0.8: scores panel resize handle ---------------------------------- */
+.scores-panel {
+  position: relative;
+}
+.scores-resize {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 7px;
+  cursor: ns-resize;
+  z-index: 10;
+}
+.scores-resize:hover {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* ---- v0.8: overview (minimap) chrome ----------------------------------- */
+.mm-chrome {
+  position: absolute;
+  top: 3px;
+  left: 20px;
+  right: 22px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  pointer-events: none;
+}
+.mm-seg,
+.mm-zoom {
+  display: flex;
+  gap: 2px;
+  pointer-events: auto;
+  background: color-mix(in srgb, var(--panel) 78%, transparent);
+  border-radius: 5px;
+  padding: 1px;
+}
+.mm-seg-btn {
+  font-family: var(--font);
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 5px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.mm-seg-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--hover);
+}
+.mm-seg-btn.active {
+  color: #fff;
+  background: var(--accent);
+}
+.mm-seg-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---- v0.8: 3D model visibility toggle ---------------------------------- */
+.sp-model-eye {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.sp-model-eye.on {
+  color: var(--accent);
+}
+.sp-model-eye:hover {
+  color: var(--text);
+}
+.sp-model.hidden {
+  opacity: 0.5;
+}

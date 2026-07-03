@@ -17,6 +17,10 @@ import { ScoresPanel } from './ui/ScoresPanel'
 import { ClusterDialog } from './ui/ClusterDialog'
 import { TreePanel } from './ui/TreePanel'
 import { AlignPanel } from './ui/AlignPanel'
+import { IdentityDialog } from './ui/IdentityDialog'
+import { MotifSearch } from './ui/MotifSearch'
+import { BarcodePanel } from './ui/BarcodePanel'
+import { MotifModel } from './analysis/motif/MotifModel'
 import { AlignController } from './align/AlignController'
 import { ProjectStore, type ProjectHost } from './project/ProjectStore'
 import { loadProject, saveProject } from './project/idb'
@@ -42,11 +46,16 @@ export default function App() {
   const [showCluster, setShowCluster] = useState(false)
   const [showTree, setShowTree] = useState(false)
   const [showAlign, setShowAlign] = useState(false)
+  const [showIdentity, setShowIdentity] = useState(false)
+  const [showMotif, setShowMotif] = useState(false)
+  const [showBarcode, setShowBarcode] = useState(() => loadPrefs().showBarcode ?? false)
+  const [scoresH, setScoresH] = useState(() => loadPrefs().scoresH ?? 104)
   const [structure, setStructure] = useState<StructureController | null>(null)
   const [project, setProject] = useState<ProjectStore | null>(null)
   const [conservation, setConservation] = useState<ConservationModel | null>(null)
   const [groups, setGroups] = useState<GroupModel | null>(null)
   const [tree, setTree] = useState<TreeModel | null>(null)
+  const [motif, setMotif] = useState<MotifModel | null>(null)
   const [align, setAlign] = useState<AlignController | null>(null)
   const [minimapSize, setMinimapSize] = useState(() => {
     const p = loadPrefs()
@@ -72,13 +81,15 @@ export default function App() {
       showMinimap,
       showStructure,
       showScores,
+      showBarcode,
+      scoresH,
       tooltipEnabled,
       minimapW: minimapSize.w,
       minimapH: minimapSize.h,
       structureW: structureSize.w,
       structureH: structureSize.h,
     })
-  }, [showLegend, showMinimap, showStructure, showScores, tooltipEnabled, minimapSize, structureSize])
+  }, [showLegend, showMinimap, showStructure, showScores, showBarcode, scoresH, tooltipEnabled, minimapSize, structureSize])
 
   // The structure controller lives alongside the editor and survives panel
   // open/close so a folded structure isn't lost when the panel is toggled.
@@ -100,6 +111,7 @@ export default function App() {
     const model = new ConservationModel(ctrl)
     const groupModel = new GroupModel(ctrl)
     const treeModel = new TreeModel(ctrl)
+    const motifModel = new MotifModel(ctrl)
     // Per-group conservation tracks: feed group subsets to the conservation model
     // and recompute shown tracks whenever the grouping changes.
     model.setGroupProvider(() => groupModel.groups().map((g) => ({ id: g.clusterId, rows: g.rows })))
@@ -122,6 +134,7 @@ export default function App() {
     proj.register(groupModel)
     proj.register(model)
     proj.register(treeModel)
+    proj.register(motifModel)
     proj.register(viewSlice)
     proj.init('Original')
 
@@ -169,6 +182,7 @@ export default function App() {
     setConservation(model)
     setGroups(groupModel)
     setTree(treeModel)
+    setMotif(motifModel)
     setProject(proj)
     setAlign(alignCtrl)
     return () => {
@@ -179,10 +193,12 @@ export default function App() {
       model.destroy()
       groupModel.destroy()
       treeModel.destroy()
+      motifModel.destroy()
       alignCtrl.destroy()
       setConservation(null)
       setGroups(null)
       setTree(null)
+      setMotif(null)
       setProject(null)
       setAlign(null)
     }
@@ -226,6 +242,9 @@ export default function App() {
           showCluster={showCluster}
           showTree={showTree}
           showAlign={showAlign}
+          showIdentity={showIdentity}
+          showMotif={showMotif}
+          showBarcode={showBarcode}
           tooltipEnabled={tooltipEnabled}
           onToggleLegend={() => setShowLegend((s) => !s)}
           onToggleMinimap={() => setShowMinimap((s) => !s)}
@@ -234,6 +253,9 @@ export default function App() {
           onToggleCluster={() => setShowCluster((s) => !s)}
           onToggleTree={() => setShowTree((s) => !s)}
           onToggleAlign={() => setShowAlign((s) => !s)}
+          onToggleIdentity={() => setShowIdentity((s) => !s)}
+          onToggleMotif={() => setShowMotif((s) => !s)}
+          onToggleBarcode={() => setShowBarcode((s) => !s)}
           onToggleTooltip={() => setTooltipEnabled((s) => !s)}
         />
       )}
@@ -251,12 +273,20 @@ export default function App() {
             ctrl={ctrl}
             width={minimapSize.w}
             height={minimapSize.h}
+            conservation={conservation}
+            group={groups}
             onResize={(w, h) => setMinimapSize({ w, h })}
             onClose={() => setShowMinimap(false)}
           />
         )}
         {ctrl && groups && showCluster && (
           <ClusterDialog ctrl={ctrl} group={groups} onClose={() => setShowCluster(false)} onToast={showToast} />
+        )}
+        {ctrl && showIdentity && (
+          <IdentityDialog ctrl={ctrl} group={groups} onClose={() => setShowIdentity(false)} onToast={showToast} />
+        )}
+        {ctrl && motif && showMotif && (
+          <MotifSearch ctrl={ctrl} model={motif} onClose={() => setShowMotif(false)} />
         )}
         {ctrl && tree && showTree && (
           <TreePanel ctrl={ctrl} model={tree} group={groups} onClose={() => setShowTree(false)} onToast={showToast} />
@@ -278,8 +308,18 @@ export default function App() {
         )}
         {dragging && <div className="dropzone">Drop a FASTA file to load</div>}
       </div>
+      {ctrl && groups && showBarcode && (
+        <BarcodePanel ctrl={ctrl} group={groups} motif={motif} onClose={() => setShowBarcode(false)} />
+      )}
       {ctrl && conservation && showScores && (
-        <ScoresPanel ctrl={ctrl} model={conservation} group={groups} onClose={() => setShowScores(false)} />
+        <ScoresPanel
+          ctrl={ctrl}
+          model={conservation}
+          group={groups}
+          height={scoresH}
+          onResize={setScoresH}
+          onClose={() => setShowScores(false)}
+        />
       )}
       {ctrl && <StatusBar ctrl={ctrl} onAbout={() => setAbout(true)} />}
       {ctrl && <ThemeSync ctrl={ctrl} />}

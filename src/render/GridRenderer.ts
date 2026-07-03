@@ -72,6 +72,8 @@ export class GridRenderer {
   theme: CanvasTheme = LIGHT_CANVAS
   /** Optional per-row group color (CSS), drawn as a gutter stripe. Set by GroupModel. */
   groupColorOf: ((visualRow: number) => string | null) | null = null
+  /** Optional motif match overlay (Ordalie high-contrast mode). Set by MotifModel. */
+  matchOverlay: { rangesOf: (visualRow: number) => Array<[number, number]>; active: boolean } | null = null
   selection: Selection | null = null
   cursor: CellPos | null = null
   hover: CellPos | null = null
@@ -172,6 +174,14 @@ export class GridRenderer {
     this.dirty = true
   }
 
+  /** Center a given cell in the viewport (used by motif "Find Next"). */
+  scrollCellIntoView(row: number, col: number): void {
+    this.setScroll(
+      col * this.cellW - this.gridWidthPx / 2 + this.cellW / 2,
+      row * this.cellH - this.gridHeightPx / 2 + this.cellH / 2,
+    )
+  }
+
   private clampScroll(): void {
     const m = maxScroll({
       cols: this.store.width,
@@ -243,6 +253,7 @@ export class GridRenderer {
     })
 
     this.paintCells(vis)
+    this.paintMatchOverlay(vis)
     this.paintSelectionAndCursor()
     this.paintGutter(vis)
     this.paintRuler(vis)
@@ -513,6 +524,40 @@ export class GridRenderer {
     ctx.imageSmoothingEnabled = false
     ctx.drawImage(bc as unknown as CanvasImageSource, GUTTER_W, RULER_H, W, H)
     ctx.imageSmoothingEnabled = true
+  }
+
+  /**
+   * Motif match overlay: mute the whole grid with a dark wash and paint matched
+   * residue bands in red (Ordalie's high-contrast Find mode). Drawn over the
+   * cells but under selection/cursor chrome, clipped to the grid rect.
+   */
+  private paintMatchOverlay(vis: ReturnType<typeof computeVisible>): void {
+    const o = this.matchOverlay
+    if (!o || !o.active) return
+    const ctx = this.ctx
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(GUTTER_W, RULER_H, this.gridWidthPx, this.gridHeightPx)
+    ctx.clip()
+    // Dark wash so non-matches recede.
+    ctx.fillStyle = 'rgba(6,8,12,0.82)'
+    ctx.fillRect(GUTTER_W, RULER_H, this.gridWidthPx, this.gridHeightPx)
+    // Red blocks for visible match ranges per visible row.
+    ctx.fillStyle = 'rgba(239,68,68,0.92)'
+    for (let v = vis.firstRow; v < vis.lastRow; v++) {
+      const ranges = o.rangesOf(v)
+      if (!ranges.length) continue
+      const y = this.cellY(v)
+      const h = this.cellY(v + 1) - y
+      for (const [c0, c1] of ranges) {
+        const a = Math.max(c0, vis.firstCol)
+        const b = Math.min(c1, vis.lastCol)
+        if (b <= a) continue
+        const x = this.cellX(a)
+        ctx.fillRect(x, y, this.cellX(b) - x, h)
+      }
+    }
+    ctx.restore()
   }
 
   private paintSelectionAndCursor(): void {

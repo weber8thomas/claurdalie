@@ -16,6 +16,8 @@ export interface Prefs {
   structureW?: number
   structureH?: number
   showScores?: boolean
+  scoresH?: number
+  showBarcode?: boolean
 }
 
 export function loadPrefs(): Prefs {

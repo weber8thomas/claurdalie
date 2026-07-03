@@ -13,13 +13,16 @@ import {
 import type { GroupModel } from '../analysis/cluster/GroupModel'
 import { useEditorSnapshot } from './useEditor'
 
-/** Height of the cluster view and the empty/computing state. */
-const CLUSTER_H = 104
+/** Draggable panel height bounds. */
+const MIN_H = 72
+const MAX_H = 360
 
 interface Props {
   ctrl: EditorController
   model: ConservationModel
   group?: GroupModel | null
+  height: number
+  onResize: (h: number) => void
   onClose: () => void
 }
 
@@ -28,7 +31,7 @@ interface Props {
  * strip drawn imperatively by ScoreTrackRenderer, kept column-aligned with the
  * alignment via the GridRenderer's view listener.
  */
-export function ScoresPanel({ ctrl, model, group, onClose }: Props) {
+export function ScoresPanel({ ctrl, model, group, height, onResize, onClose }: Props) {
   const snap = useEditorSnapshot(ctrl)
   // Re-render chrome when the model changes (mode, shown set, computing state).
   useSyncExternalStore(
@@ -73,7 +76,7 @@ export function ScoresPanel({ ctrl, model, group, onClose }: Props) {
 
       // Cluster view: a single method, columns painted by conservation class.
       if (model.mode_() === 'cluster') {
-        r.resize(rect.width, CLUSTER_H)
+        r.resize(rect.width, height)
         const method = model.clusterMethod_()
         r.drawClusters({ ...geom, dark: snap.dark, method, track: model.track(method) })
         return
@@ -89,8 +92,8 @@ export function ScoresPanel({ ctrl, model, group, onClose }: Props) {
         const groups = t.groupScores?.map((gs) => ({ color: groupColor(gs.id), scores: gs.scores }))
         rows.push({ method: m, scores: t.scores, color: METHOD_COLORS[m], groups })
       }
-      // Height grows with the number of rows; keep one row's worth when empty.
-      r.resize(rect.width, Math.max(1, rows.length) * TRACK_ROW_H)
+      // User-set panel height; rows scale to fill it (min one row's worth).
+      r.resize(rect.width, Math.max(TRACK_ROW_H, height))
       r.draw({ ...geom, rows })
     }
 
@@ -104,13 +107,31 @@ export function ScoresPanel({ ctrl, model, group, onClose }: Props) {
       offModel()
       ro.disconnect()
     }
-  }, [ctrl, model, snap.dark])
+  }, [ctrl, model, group, snap.dark, height])
+
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const sy = e.clientY
+    const sh = height
+    const move = (ev: PointerEvent) => {
+      // Panel sits at the bottom, so dragging the top edge UP makes it taller.
+      onResize(Math.round(Math.max(MIN_H, Math.min(MAX_H, sh - (ev.clientY - sy)))))
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
 
   const mode = model.mode_()
   const clusterMethod = model.clusterMethod_()
 
   return (
     <div className="scores-panel" ref={wrapRef}>
+      <div className="scores-resize" title="Resize" onPointerDown={startResize} />
       <div className="scores-chrome">
         <span className="scores-title">Conservation</span>
         <div className="scores-mode" role="tablist" aria-label="Conservation view">

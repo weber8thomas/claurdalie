@@ -31,6 +31,8 @@ interface StructureModel {
   structure: Structure
   color: string
   kind: ModelKind
+  /** Whether the model is rendered in the 3D viewer (hidden ≠ removed). */
+  visible: boolean
   /** Alignment row this model was folded from (fold kind only). */
   rowId?: number
   /** Column↔residue map for the source row (fold kind only). */
@@ -47,6 +49,7 @@ export interface ModelInfo {
   residues: number
   origin: string
   linked: boolean
+  visible: boolean
   note?: string
 }
 
@@ -111,6 +114,7 @@ export class StructureController {
       residues: m.structure.residueCount,
       origin: m.structure.origin,
       linked: m.rowId != null,
+      visible: m.visible,
       note: m.note,
     }))
   }
@@ -125,9 +129,9 @@ export class StructureController {
     for (const fn of this.listeners) fn()
   }
 
-  /** Models for the viewer, in insertion order. */
+  /** Models for the viewer, in insertion order. Hidden models are excluded. */
   viewerModels(): ViewerModel[] {
-    return [...this.models.values()].map((m) => ({
+    return [...this.models.values()].filter((m) => m.visible).map((m) => ({
       id: m.id,
       pdb: m.structure.pdb,
       plddt: m.structure.plddt,
@@ -191,6 +195,7 @@ export class StructureController {
       color: existing?.color ?? this.nextColor(),
       kind: 'fold',
       rowId,
+      visible: existing?.visible ?? true,
       map: ResidueColumnMap.build(codes),
       note: input.substitutions > 0 ? `${input.substitutions} substituted` : undefined,
     })
@@ -204,7 +209,7 @@ export class StructureController {
     try {
       const structure = structureFromFile(pdbText, fileName)
       const id = `file:${++this.fileCounter}`
-      this.models.set(id, { id, label: fileName, structure, color: this.nextColor(), kind: 'file' })
+      this.models.set(id, { id, label: fileName, structure, color: this.nextColor(), kind: 'file', visible: true })
       this.emit({ error: null, errorKind: null }, true)
     } catch (e) {
       const err = e instanceof FoldError ? e : new FoldError('invalid', String(e))
@@ -233,7 +238,7 @@ export class StructureController {
         }
       }
       const id = `cmp:${++this.fileCounter}`
-      this.models.set(id, { id, label: fileName, structure, color: this.nextColor(), kind: 'compare', note })
+      this.models.set(id, { id, label: fileName, structure, color: this.nextColor(), kind: 'compare', visible: true, note })
       this.emit({ error: null, errorKind: null }, true)
     } catch (e) {
       const err = e instanceof FoldError ? e : new FoldError('invalid', String(e))
@@ -243,6 +248,13 @@ export class StructureController {
 
   removeModel(id: string): void {
     if (this.models.delete(id)) this.emit({}, true)
+  }
+  /** Show/hide a model in the 3D viewer without discarding it. */
+  toggleModelVisibility(id: string): void {
+    const m = this.models.get(id)
+    if (!m) return
+    m.visible = !m.visible
+    this.emit({}, true) // bump modelsRev so the panel reconciles the viewer
   }
   clearAll(): void {
     this.models.clear()
@@ -262,6 +274,7 @@ export class StructureController {
   hoverTarget(visualRow: number, col: number): { modelId: string; index: number } | null {
     const rowId = this.editor.store.rowIdAt(visualRow)
     for (const m of this.models.values()) {
+      if (!m.visible) continue
       if (m.rowId === rowId && m.map) {
         const index = m.map.residueAtColumn(col)
         return index == null ? null : { modelId: m.id, index }

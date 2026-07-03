@@ -32,6 +32,9 @@ interface Props {
   showCluster: boolean
   showTree: boolean
   showAlign: boolean
+  showIdentity: boolean
+  showMotif: boolean
+  showBarcode: boolean
   tooltipEnabled: boolean
   onToggleLegend: () => void
   onToggleMinimap: () => void
@@ -40,6 +43,9 @@ interface Props {
   onToggleCluster: () => void
   onToggleTree: () => void
   onToggleAlign: () => void
+  onToggleIdentity: () => void
+  onToggleMotif: () => void
+  onToggleBarcode: () => void
   onToggleTooltip: () => void
 }
 
@@ -63,6 +69,9 @@ export function Toolbar({
   showCluster,
   showTree,
   showAlign,
+  showIdentity,
+  showMotif,
+  showBarcode,
   tooltipEnabled,
   onToggleLegend,
   onToggleMinimap,
@@ -71,6 +80,9 @@ export function Toolbar({
   onToggleCluster,
   onToggleTree,
   onToggleAlign,
+  onToggleIdentity,
+  onToggleMotif,
+  onToggleBarcode,
   onToggleTooltip,
 }: Props) {
   const snap = useEditorSnapshot(ctrl)
@@ -217,8 +229,29 @@ export function Toolbar({
         >
           <Icon name="group" />
         </button>
+        <button
+          className={'icon' + (showBarcode ? ' active' : '')}
+          onClick={onToggleBarcode}
+          title="Barcode (per-group conservation)"
+        >
+          <Icon name="barcode" />
+        </button>
         <button className={'icon' + (showTree ? ' active' : '')} onClick={onToggleTree} title="Phylogenetic tree">
           <Icon name="tree" />
+        </button>
+        <button
+          className={'icon' + (showIdentity ? ' active' : '')}
+          onClick={onToggleIdentity}
+          title="Sequence identity"
+        >
+          <Icon name="identity" />
+        </button>
+        <button
+          className={'icon' + (showMotif ? ' active' : '')}
+          onClick={onToggleMotif}
+          title="Motif search (GCG FindPatterns)"
+        >
+          <Icon name="search" />
         </button>
         <button className={'icon' + (showAlign ? ' active' : '')} onClick={onToggleAlign} title="Re-align sequences">
           <Icon name="align" />

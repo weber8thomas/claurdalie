@@ -4,6 +4,7 @@ import type { EditorController } from '../editor/EditorController'
 import type { StructureController } from '../structure/StructureController'
 import { createStructureViewer, type StructureViewer, type ColorMode, type Representation } from '../structure/viewer'
 import { useEditorSnapshot } from './useEditor'
+import { Icon } from './Icon'
 import type { HoverPayload } from '../editor/interaction'
 
 const MIN_W = 240
@@ -209,12 +210,19 @@ export function StructurePanel({ ctrl, structure, hover, width, height, onResize
       {st.models.length > 0 && (
         <div className="sp-models">
           {st.models.map((m) => (
-            <div className="sp-model" key={m.id} title={m.origin + (m.note ? ` — ${m.note}` : '')}>
+            <div className={'sp-model' + (m.visible ? '' : ' hidden')} key={m.id} title={m.origin + (m.note ? ` — ${m.note}` : '')}>
               <span className="sp-swatch" style={{ background: m.color }} />
               <span className="sp-model-name">{m.label}</span>
               <span className="sp-model-meta">
                 {m.residues} res{m.linked ? ' · linked' : ''}{m.kind === 'compare' ? ' · cmp' : ''}
               </span>
+              <button
+                className={'sp-model-eye' + (m.visible ? ' on' : '')}
+                title={m.visible ? 'Hide from 3D view' : 'Show in 3D view'}
+                onClick={() => structure.toggleModelVisibility(m.id)}
+              >
+                <Icon name={m.visible ? 'eye' : 'eye-off'} size={14} />
+              </button>
               <button className="sp-model-x" title="Remove" onClick={() => structure.removeModel(m.id)}>×</button>
             </div>
           ))}
