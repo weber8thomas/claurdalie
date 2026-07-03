@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { EditorController } from '../editor/EditorController'
 import { useEditorSnapshot } from './useEditor'
-import { SCHEME_LUTS } from '../color/schemes'
 import { GAP_CODE } from '../core/alphabet'
 
 const MIN_W = 120
@@ -36,9 +35,13 @@ export function Minimap({ ctrl, width, height, onResize, onClose }: Props) {
     const { store } = ctrl
     const rows = store.height
     const cols = store.width
-    const lut = SCHEME_LUTS[snap.schemeId]
+    // Use the ACTIVE scheme with per-column stats so conservation-based color
+    // changes (e.g. ClustalX after a shift) show up in the overview too.
+    const scheme = ctrl.scheme()
+    const dynamic = scheme.dynamic
     const bg = snap.dark ? [26, 27, 32] : [255, 255, 255]
-    const present = snap.dark ? [120, 130, 150] : [150, 160, 175]
+    const present = snap.dark ? [90, 96, 110] : [176, 182, 194] // residue present but not colored
+    const cx = { code: 0, col: 0, stats: null as ReturnType<typeof ctrl.stats.get> | null }
     for (let y = 0; y < H; y++) {
       const row = rows > 0 ? Math.min(rows - 1, Math.floor((y / H) * rows)) : 0
       for (let x = 0; x < W; x++) {
@@ -49,7 +52,10 @@ export function Minimap({ ctrl, width, height, onResize, onClose }: Props) {
         if (code === GAP_CODE) {
           ;[r, g, b] = bg
         } else {
-          const c = lut?.[code]
+          cx.code = code
+          cx.col = col
+          cx.stats = dynamic ? ctrl.stats.get(col) : null
+          const c = scheme.bg(cx)
           if (c != null) {
             r = (c >> 16) & 0xff
             g = (c >> 8) & 0xff
