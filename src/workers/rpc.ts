@@ -8,11 +8,14 @@ import {
   computeConservation,
   conservationTransferables,
   computeClustering,
+  computeTree,
   type ConservationRequest,
   type ConservationResult,
   type ClusterRequest,
+  type TreeRequest,
 } from './compute'
 import type { ClusterRunResult } from '../analysis/cluster/run'
+import type { PhyloTree } from '../tree/types'
 import type { WorkerRequest, WorkerResponse } from './numerics.worker'
 
 export class NumericsClient {
@@ -79,6 +82,25 @@ export class NumericsClient {
         this.pending.delete(id)
         try {
           resolve(computeClustering(req))
+        } catch {
+          reject(e)
+        }
+      }
+    })
+  }
+
+  tree(req: TreeRequest, transfer: Transferable[] = [req.flat.buffer]): Promise<{ tree: PhyloTree }> {
+    if (!this.worker) return Promise.resolve(computeTree(req))
+    const id = ++this.seq
+    const message: WorkerRequest = { id, kind: 'tree', req }
+    return new Promise<{ tree: PhyloTree }>((resolve, reject) => {
+      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject })
+      try {
+        this.worker!.postMessage(message, transfer)
+      } catch (e) {
+        this.pending.delete(id)
+        try {
+          resolve(computeTree(req))
         } catch {
           reject(e)
         }

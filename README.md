@@ -32,9 +32,13 @@ snapshot-driven exploration of an alignment's informational content, in the brow
   **Gaussian mixture + AIC/BIC** (auto-selecting the number of groups); groups reorder the
   alignment into contiguous blocks with a gutter color stripe, and conservation gains a
   colored **per-group track** alongside the global one
+- **Phylogenetic tree** — neighbor-joining from an identity-distance matrix (Pairwise/Global
+  gap handling), optional **bootstrap** (deterministic, seeded); an interactive canvas viewer
+  with **dendrogram + radial** layouts, click-to-re-root / shift-click-to-swap, leaf coloring
+  by cluster, bootstrap-support discs, pan/zoom, and Newick/NEXUS import
 - **Instances (snapshots)** — an always-visible combobox to juggle parallel analytical
   hypotheses; switching an instance restores the *exact* state of the alignment **and** every
-  sub-module (shown scores, clustering/groups, view, selection). Fork / overwrite / rename / delete
+  sub-module (shown scores, clustering/groups, tree, view, selection). Fork / overwrite / rename / delete
 - **Light / dark** theme, accessible controls, built-in demo + heavy stress datasets
 
 ## Getting started
@@ -81,6 +85,8 @@ structure/   opt-in 3D: pluggable StructureSource (ESMFold / local PDB), fold ca
 analysis/    conservation methods + physico-chemical matrices (BLOSUM62, volume/polarity/pKa);
              cluster criteria + distance matrix + methods (kmeans/DPC/Secator/mixture) +
              GroupModel; pure, worker-safe, keyed off the shared column-count kernel
+tree/        neighbor-joining + bootstrap + Newick/NEXUS I/O + dendrogram/radial layout +
+             TreeModel (re-root/swap), reusing analysis/cluster/distance.ts
 workers/     numerics Web Worker + typed RPC (Transferables, no SharedArrayBuffer so it
              works on GitHub Pages), with a main-thread fallback for offline/SSR
 project/     Snapshot spine: SerializableModule contract, ProjectStore (instant instance
@@ -97,11 +103,10 @@ Static build deployed to **GitHub Pages** via `.github/workflows/deploy.yml`
 
 ## Roadmap
 
-Reimplementing Ordalie's analysis layer, client-side and lightweight. Shipped: conservation
-+ the snapshot/instance spine (v0.4) and clustering & groups (v0.5). Next, in dependency order:
+Reimplementing Ordalie's analysis layer, client-side and lightweight. Shipped: conservation +
+the snapshot/instance spine (v0.4), clustering & groups (v0.5), and the phylogenetic tree
+(v0.6). Next, in dependency order:
 
-- **v0.6 — Phylogenetic tree**: distance matrix → NJ/BIONJ, bootstrap, dendrogram + radial
-  viewer with re-root/swap (reuses the v0.5 `cluster/distance.ts`)
 - **v0.7 — Persistence + re-align**: `.clproj` project export/import (IndexedDB working
   state); in-browser re-alignment via kalign (biowasm/Aioli) behind a pluggable `Aligner`,
   with an optional exact-MAFFT-via-EBI provider; variant/mutation-effect seam

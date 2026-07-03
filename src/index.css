@@ -948,6 +948,61 @@ kbd {
   text-align: right;
 }
 
+/* ---- phylogenetic tree panel ------------------------------------------- */
+.tree-panel {
+  position: absolute;
+  top: var(--sp-3);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(720px, 92%);
+  height: 460px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  z-index: 45;
+}
+.tree-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.tree-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.tree-spacer {
+  flex: 1;
+}
+.tree-controls .select {
+  height: 26px;
+  font-size: 12px;
+}
+.tree-canvas {
+  flex: 1;
+  display: block;
+  cursor: grab;
+  min-height: 0;
+}
+.tree-canvas:active {
+  cursor: grabbing;
+}
+.tree-hint {
+  padding: 4px 12px;
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+
 /* ---- context menu ------------------------------------------------------- */
 .ctx-menu {
   position: fixed;

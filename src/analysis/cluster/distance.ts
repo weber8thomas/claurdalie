@@ -72,6 +72,23 @@ export function identityDistance(
   return D
 }
 
+/**
+ * Identity distance over an explicit column-index list (repeats allowed) — used
+ * by phylogenetic bootstrap, which resamples columns with replacement.
+ */
+export function identityDistanceOverColumns(rows: Uint8Array[], cols: number[]): Float64Array[] {
+  const n = rows.length
+  const D: Float64Array[] = Array.from({ length: n }, () => new Float64Array(n))
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const d = 1 - pairIdentity(rows[i], rows[j], cols)
+      D[i][j] = d
+      D[j][i] = d
+    }
+  }
+  return D
+}
+
 /** Euclidean distance matrix over feature vectors (already z-scored). */
 export function euclideanDistance(vectors: Float64Array[]): Float64Array[] {
   const n = vectors.length

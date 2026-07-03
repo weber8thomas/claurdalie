@@ -15,9 +15,11 @@ import { StructureController } from './structure/StructureController'
 import { SnapshotBar } from './ui/SnapshotBar'
 import { ScoresPanel } from './ui/ScoresPanel'
 import { ClusterDialog } from './ui/ClusterDialog'
+import { TreePanel } from './ui/TreePanel'
 import { ProjectStore, type ProjectHost } from './project/ProjectStore'
 import { ConservationModel } from './analysis/conservation/ConservationModel'
 import { GroupModel } from './analysis/cluster/GroupModel'
+import { TreeModel } from './tree/TreeModel'
 import type { SerializableModule } from './project/types'
 import { loadPrefs, savePrefs } from './editor/persistence'
 import type { Hit } from './render/GridRenderer'
@@ -35,10 +37,12 @@ export default function App() {
   const [showStructure, setShowStructure] = useState(() => loadPrefs().showStructure ?? false)
   const [showScores, setShowScores] = useState(() => loadPrefs().showScores ?? false)
   const [showCluster, setShowCluster] = useState(false)
+  const [showTree, setShowTree] = useState(false)
   const [structure, setStructure] = useState<StructureController | null>(null)
   const [project, setProject] = useState<ProjectStore | null>(null)
   const [conservation, setConservation] = useState<ConservationModel | null>(null)
   const [groups, setGroups] = useState<GroupModel | null>(null)
+  const [tree, setTree] = useState<TreeModel | null>(null)
   const [minimapSize, setMinimapSize] = useState(() => {
     const p = loadPrefs()
     return { w: p.minimapW ?? 180, h: p.minimapH ?? 120 }
@@ -90,6 +94,7 @@ export default function App() {
     if (!ctrl) return
     const model = new ConservationModel(ctrl)
     const groupModel = new GroupModel(ctrl)
+    const treeModel = new TreeModel(ctrl)
     // Per-group conservation tracks: feed group subsets to the conservation model
     // and recompute shown tracks whenever the grouping changes.
     model.setGroupProvider(() => groupModel.groups().map((g) => ({ id: g.clusterId, rows: g.rows })))
@@ -111,17 +116,21 @@ export default function App() {
     // conservation recomputes on a snapshot switch.
     proj.register(groupModel)
     proj.register(model)
+    proj.register(treeModel)
     proj.register(viewSlice)
     proj.init('Original')
     setConservation(model)
     setGroups(groupModel)
+    setTree(treeModel)
     setProject(proj)
     return () => {
       offGroups()
       model.destroy()
       groupModel.destroy()
+      treeModel.destroy()
       setConservation(null)
       setGroups(null)
+      setTree(null)
       setProject(null)
     }
   }, [ctrl])
@@ -162,12 +171,14 @@ export default function App() {
           showStructure={showStructure}
           showScores={showScores}
           showCluster={showCluster}
+          showTree={showTree}
           tooltipEnabled={tooltipEnabled}
           onToggleLegend={() => setShowLegend((s) => !s)}
           onToggleMinimap={() => setShowMinimap((s) => !s)}
           onToggleStructure={() => setShowStructure((s) => !s)}
           onToggleScores={() => setShowScores((s) => !s)}
           onToggleCluster={() => setShowCluster((s) => !s)}
+          onToggleTree={() => setShowTree((s) => !s)}
           onToggleTooltip={() => setTooltipEnabled((s) => !s)}
         />
       )}
@@ -191,6 +202,9 @@ export default function App() {
         )}
         {ctrl && groups && showCluster && (
           <ClusterDialog ctrl={ctrl} group={groups} onClose={() => setShowCluster(false)} onToast={showToast} />
+        )}
+        {ctrl && tree && showTree && (
+          <TreePanel ctrl={ctrl} model={tree} group={groups} onClose={() => setShowTree(false)} onToast={showToast} />
         )}
         {ctrl && structure && showStructure && (
           <StructurePanel

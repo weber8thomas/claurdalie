@@ -30,12 +30,14 @@ interface Props {
   showStructure: boolean
   showScores: boolean
   showCluster: boolean
+  showTree: boolean
   tooltipEnabled: boolean
   onToggleLegend: () => void
   onToggleMinimap: () => void
   onToggleStructure: () => void
   onToggleScores: () => void
   onToggleCluster: () => void
+  onToggleTree: () => void
   onToggleTooltip: () => void
 }
 
@@ -57,12 +59,14 @@ export function Toolbar({
   showStructure,
   showScores,
   showCluster,
+  showTree,
   tooltipEnabled,
   onToggleLegend,
   onToggleMinimap,
   onToggleStructure,
   onToggleScores,
   onToggleCluster,
+  onToggleTree,
   onToggleTooltip,
 }: Props) {
   const snap = useEditorSnapshot(ctrl)
@@ -208,6 +212,9 @@ export function Toolbar({
           title="Clustering & groups"
         >
           <Icon name="group" />
+        </button>
+        <button className={'icon' + (showTree ? ' active' : '')} onClick={onToggleTree} title="Phylogenetic tree">
+          <Icon name="tree" />
         </button>
         <button
           className={'icon' + (showStructure ? ' active' : '')}

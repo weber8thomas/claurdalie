@@ -9,6 +9,8 @@ import { scoreColumn } from '../analysis/conservation/methods'
 import { autoLabels } from '../analysis/conservation/automatic'
 import type { ConservationMethodId, ScoreTrack } from '../analysis/conservation/types'
 import { runClustering, type ClusterRunOptions, type ClusterRunResult } from '../analysis/cluster/run'
+import { buildTree, type TreeBuildOptions } from '../tree/build'
+import type { PhyloTree } from '../tree/types'
 
 export interface ConservationRequest {
   flat: Uint8Array // row-major: flat[row * width + col]
@@ -79,6 +81,22 @@ export function computeClustering(req: ClusterRequest): ClusterRunResult {
   const rows: Uint8Array[] = []
   for (let r = 0; r < nRows; r++) rows.push(flat.subarray(r * width, (r + 1) * width))
   return runClustering(rows, width, req.options)
+}
+
+// ---- phylogenetic tree ---------------------------------------------------
+
+export interface TreeRequest {
+  flat: Uint8Array
+  nRows: number
+  width: number
+  options: TreeBuildOptions
+}
+
+export function computeTree(req: TreeRequest): { tree: PhyloTree } {
+  const { flat, nRows, width } = req
+  const rows: Uint8Array[] = []
+  for (let r = 0; r < nRows; r++) rows.push(flat.subarray(r * width, (r + 1) * width))
+  return { tree: buildTree(rows, width, req.options) }
 }
 
 /** Transferable buffers in a conservation result (for postMessage). */
