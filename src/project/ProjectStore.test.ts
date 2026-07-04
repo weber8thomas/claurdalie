@@ -94,3 +94,104 @@ describe('ProjectStore snapshot spine', () => {
     expect(infos[0].name).toBe('One')
   })
 })
+
+describe('single-instance session export/import', () => {
+  it('exportActive captures only the active instance + its metadata', () => {
+    const host = new FakeHost([seq('a', [1, 2, 3])])
+    const mod = new FakeModule()
+    const store = new ProjectStore(host)
+    store.register(mod)
+    store.init('Original')
+    mod.shown = ['shannon']
+
+    store.newSnapshot('Variant A')
+    host.loadSequences([seq('a', [1, 2, 3, 0])])
+    mod.shown = ['jsd']
+
+    const sp = store.exportActive()
+    expect(sp.snapshots).toHaveLength(1)
+    expect(sp.snapshots[0].name).toBe('Variant A')
+    // The one exported snapshot carries the active alignment + module slice.
+    expect(sp.snapshots[0].slices.fake).toEqual({ shown: ['jsd'] })
+    expect(sp.activeSnapshotId).toBe(sp.snapshots[0].id)
+  })
+
+  it('addInstances appends into the project without replacing it', () => {
+    // Source project: export its (only) instance.
+    const src = new ProjectStore(new FakeHost([seq('x', [4, 5])]))
+    const srcMod = new FakeModule()
+    src.register(srcMod)
+    src.init('Imported')
+    srcMod.shown = ['liu']
+    const sp = src.exportActive()
+
+    // Target project with two instances of its own.
+    const host = new FakeHost([seq('a', [1, 2, 3])])
+    const mod = new FakeModule()
+    const store = new ProjectStore(host)
+    store.register(mod)
+    store.init('Original')
+    store.newSnapshot('Variant A')
+
+    store.addInstances(sp)
+
+    const infos = store.list()
+    expect(infos).toHaveLength(3) // N + 1, existing instances kept
+    // Active switched to the freshly added instance, which restored its state.
+    const active = infos.find((i) => i.active)!
+    expect(active.name).toBe('Imported')
+    expect(host.columnCount()).toBe(2)
+    expect(mod.shown).toEqual(['liu'])
+    expect(infos.map((i) => i.name)).toEqual(['Original', 'Variant A', 'Imported'])
+  })
+
+  it('remaps ids so an imported instance never collides with existing ones', () => {
+    const src = new ProjectStore(new FakeHost([seq('x', [4, 5])]))
+    src.init('Imported')
+    const sp = src.exportActive() // snapshot id 1
+
+    const host = new FakeHost([seq('a', [1, 2])])
+    const store = new ProjectStore(host)
+    store.init('Original') // also snapshot id 1
+    store.addInstances(sp)
+
+    const ids = store.list().map((i) => i.id)
+    expect(new Set(ids).size).toBe(ids.length) // all unique
+    expect(store.list()).toHaveLength(2)
+  })
+
+  it('de-duplicates the imported instance name on collision', () => {
+    const src = new ProjectStore(new FakeHost([seq('x', [4, 5])]))
+    src.init('Original')
+    const sp = src.exportActive()
+
+    const store = new ProjectStore(new FakeHost([seq('a', [1, 2])]))
+    store.init('Original')
+    store.addInstances(sp)
+
+    const names = store.list().map((i) => i.name)
+    expect(names[0]).toBe('Original')
+    expect(names[1]).not.toBe('Original') // suffixed to stay unique
+  })
+
+  it('round-trips a single instance through the gzip file layer', async () => {
+    const src = new ProjectStore(new FakeHost([seq('x', [4, 5, 6])]))
+    const srcMod = new FakeModule()
+    src.register(srcMod)
+    src.init('FromFile')
+    srcMod.shown = ['bild']
+    const bytes = await src.toFileActive()
+
+    const host = new FakeHost([seq('a', [1, 2])])
+    const mod = new FakeModule()
+    const store = new ProjectStore(host)
+    store.register(mod)
+    store.init('Original')
+    await store.addInstancesFromFile(bytes)
+
+    expect(store.list()).toHaveLength(2)
+    expect(store.list().find((i) => i.active)?.name).toBe('FromFile')
+    expect(host.columnCount()).toBe(3)
+    expect(mod.shown).toEqual(['bild'])
+  })
+})

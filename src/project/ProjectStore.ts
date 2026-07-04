@@ -191,6 +191,66 @@ export class ProjectStore {
     this.import(sp)
   }
 
+  // ---- single-instance (session) export/import ----------------------------
+  //
+  // The whole-project export above is one scope of a "session"; the other is a
+  // single instance — its alignment + its metadata (module slices). Both share
+  // the .clproj on-disk shape: a single-instance file is just a SerializedProject
+  // carrying one snapshot. The scope difference lives in how the file is imported
+  // (replace the project vs. add as a new instance), not in a separate format.
+
+  /** Serialize ONLY the active instance (captures its live state first). */
+  exportActive(): SerializedProject {
+    this.captureActive()
+    const snap = this.active
+    if (!snap) throw new Error('No active instance to export')
+    return encodeProject([snap], snap.id, this.nextId)
+  }
+
+  /** Gzipped .clproj bytes for just the active instance. */
+  async toFileActive(): Promise<Uint8Array> {
+    return gzipJson(this.exportActive())
+  }
+
+  /**
+   * Merge a serialized project's snapshots into THIS project as new instances,
+   * rather than replacing it. Incoming ids are remapped to fresh ones (so they
+   * never collide), parent links are remapped within the incoming set (and
+   * dropped otherwise), and names are de-duplicated. Switches to the first
+   * added instance.
+   *
+   * A project normally holds instances of the SAME alignment, but each snapshot
+   * carries its own sequences, so an instance imported from a different
+   * alignment still restores correctly on switch (its groups/tree slices key off
+   * that snapshot's own sequence names).
+   */
+  addInstances(sp: SerializedProject): void {
+    const { snapshots } = decodeProject(sp)
+    if (!snapshots.length) throw new Error('Nothing to import — file has no instances')
+    this.captureActive()
+    const idMap = new Map<number, number>()
+    for (const s of snapshots) idMap.set(s.id, this.nextId++)
+    let firstId: number | undefined
+    for (const s of snapshots) {
+      const newId = idMap.get(s.id)!
+      const parentId = s.parentId !== undefined ? idMap.get(s.parentId) : undefined
+      const taken = this.snapshots.some((x) => x.name === s.name)
+      this.snapshots.push({ ...s, id: newId, parentId, name: taken ? this.uniqueName(s.name) : s.name })
+      if (firstId === undefined) firstId = newId
+    }
+    if (firstId !== undefined) {
+      this.activeId = firstId
+      this.restore(this.snapshots.find((s) => s.id === firstId)!)
+    }
+    this.emit()
+  }
+
+  /** Add instances from gzipped .clproj bytes (see addInstances). */
+  async addInstancesFromFile(bytes: Uint8Array): Promise<void> {
+    const sp = await gunzipJson<SerializedProject>(bytes)
+    this.addInstances(sp)
+  }
+
   private uniqueName(base: string): string {
     const stem = base.replace(/ \d+$/, '')
     let n = 2

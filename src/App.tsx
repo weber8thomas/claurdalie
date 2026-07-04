@@ -152,6 +152,10 @@ export default function App() {
     proj.register(treeModel)
     proj.register(motifModel)
     proj.register(viewSlice)
+    // Annotations seam (deferred): a future AnnotationModel implementing
+    // SerializableModule with sliceKey 'annotations' would register here and then
+    // ride every snapshot's slices — serializing into both the whole-project and
+    // single-instance .clproj sessions with no format change.
     proj.init('Original')
 
     // Auto-persist the working project to IndexedDB (debounced), and restore any
