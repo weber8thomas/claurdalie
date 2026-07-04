@@ -1,8 +1,9 @@
 import { useState, useSyncExternalStore } from 'react'
-import { ActionIcon, Button, Checkbox, Group, Text, TextInput } from '@mantine/core'
-import { IconChevronLeft, IconChevronRight, IconX } from '@tabler/icons-react'
+import { Button, Checkbox, Group, SegmentedControl, Text, TextInput } from '@mantine/core'
+import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react'
 import type { EditorController } from '../editor/EditorController'
-import type { MotifModel } from '../analysis/motif/MotifModel'
+import type { MotifModel, MotifScope } from '../analysis/motif/MotifModel'
+import { FloatingPanel } from './panel/FloatingPanel'
 
 interface Props {
   ctrl: EditorController
@@ -17,13 +18,15 @@ interface Props {
 export function MotifSearch({ model, onClose }: Props) {
   useSyncExternalStore(
     (fn) => model.subscribe(fn),
-    () => `${model.getPattern()}|${model.matchCount()}|${model.currentIndex()}|${model.isActive()}|${model.errorText() ?? ''}`,
+    () =>
+      `${model.getPattern()}|${model.matchCount()}|${model.currentIndex()}|${model.isActive()}|${model.errorText() ?? ''}|${model.getScope()}|${model.hasGroups()}|${model.isComputing()}`,
   )
   const [text, setText] = useState(model.getPattern())
 
   const count = model.matchCount()
   const err = model.errorText()
   const idx = model.currentIndex()
+  const computing = model.isComputing()
 
   const onChange = (v: string) => {
     setText(v)
@@ -31,14 +34,16 @@ export function MotifSearch({ model, onClose }: Props) {
   }
 
   return (
-    <div className="motif-panel">
-      <div className="panel-head">
-        <span className="panel-title">Motif search</span>
-        <ActionIcon variant="subtle" color="gray" onClick={onClose} aria-label="Close">
-          <IconX size={16} />
-        </ActionIcon>
-      </div>
-
+    <FloatingPanel
+      panelKey="motif"
+      title="Motif search"
+      onClose={onClose}
+      defaultPos="top-right"
+      defaultSize={{ w: 320, h: 220 }}
+      minSize={{ w: 280, h: 180 }}
+      maxSize={{ w: 520, h: 420 }}
+    >
+      <div className="motif-body">
       <div className="cluster-section">
         <TextInput
           size="xs"
@@ -86,9 +91,30 @@ export function MotifSearch({ model, onClose }: Props) {
           onChange={(e) => model.setActive(e.currentTarget.checked)}
         />
         <Text fz="xs" c="dimmed">
-          {count === 0 ? (text.trim() && !err ? 'no matches' : '') : `${idx + 1} / ${count}`}
+          {computing ? 'computing…' : count === 0 ? (text.trim() && !err ? 'no matches' : '') : `${idx + 1} / ${count}`}
         </Text>
       </Group>
-    </div>
+
+      {model.hasGroups() && (
+        <Group gap="xs" mt="xs" align="center">
+          <Text fz="xs" c="dimmed">
+            Scope
+          </Text>
+          <SegmentedControl
+            size="xs"
+            value={model.getScope()}
+            onChange={(v) => model.setScope(v as MotifScope)}
+            data={[
+              { value: 'sequence', label: 'Per sequence' },
+              { value: 'group', label: 'Per group' },
+            ]}
+          />
+          <Text fz="xs" c="dimmed" title="With a grouping active, 'Per group' highlights one representative sequence per group instead of every member">
+            {model.getScope() === 'group' ? 'one row per group' : 'every sequence'}
+          </Text>
+        </Group>
+      )}
+      </div>
+    </FloatingPanel>
   )
 }

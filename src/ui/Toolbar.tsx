@@ -43,6 +43,9 @@ import type { ProjectStore } from '../project/ProjectStore'
 import { useEditorSnapshot } from './useEditor'
 import { usePanels, type PanelKey } from './panelsStore'
 import { BrandMark } from './BrandMark'
+import { GLOBINS_FASTA } from '../datasets/globins'
+import { KINASE_FASTA } from '../datasets/kinase'
+import { REPO_URL } from '../version'
 
 interface Props {
   ctrl: EditorController
@@ -138,6 +141,12 @@ export function Toolbar({ ctrl, project, onToast, onToggleHelp, onAbout }: Props
     if (kind === 'light') {
       ctrl.loadDemo()
       onToast('Loaded demo: cytochrome c (12 species)')
+    } else if (kind === 'globins') {
+      ctrl.loadFasta(GLOBINS_FASTA)
+      onToast('Loaded globins: myoglobin + hemoglobin α/β (12 seqs)')
+    } else if (kind === 'kinase') {
+      ctrl.loadFasta(KINASE_FASTA)
+      onToast('Loaded kinase cores (12 seqs) — try Motif search “DFG” or “HRD”')
     } else if (kind === 'heavy') {
       onToast('Generating heavy dataset…')
       setTimeout(() => {
@@ -226,10 +235,16 @@ export function Toolbar({ ctrl, project, onToast, onToggleHelp, onAbout }: Props
 
   return (
     <div className="toolbar" data-rev={projKey}>
-      <div className="brand">
+      <a
+        className="brand"
+        href={REPO_URL}
+        target="_blank"
+        rel="noreferrer noopener"
+        title="View Claurdalie on GitHub"
+      >
         <BrandMark />
         Claurdalie
-      </div>
+      </a>
 
       <Group gap={2} wrap="nowrap" className="menubar">
         {/* ---------------- File ---------------- */}
@@ -250,6 +265,12 @@ export function Toolbar({ ctrl, project, onToast, onToggleHelp, onAbout }: Props
             <Menu.Label>Examples</Menu.Label>
             <Menu.Item leftSection={<IconFlask size={ICON} />} onClick={() => loadExample('light')}>
               Demo · cytochrome c
+            </Menu.Item>
+            <Menu.Item leftSection={<IconFlask size={ICON} />} onClick={() => loadExample('globins')}>
+              Globins · Mb + Hb α/β
+            </Menu.Item>
+            <Menu.Item leftSection={<IconFlask size={ICON} />} onClick={() => loadExample('kinase')}>
+              Kinases · motif demo
             </Menu.Item>
             <Menu.Item leftSection={<IconFlask size={ICON} />} onClick={() => loadExample('heavy')}>
               Heavy · 3k × 10k

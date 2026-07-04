@@ -11,6 +11,7 @@ import type { ConservationMethodId, ScoreTrack } from '../analysis/conservation/
 import { runClustering, type ClusterRunOptions, type ClusterRunResult } from '../analysis/cluster/run'
 import { buildTree, type TreeBuildOptions } from '../tree/build'
 import type { PhyloTree } from '../tree/types'
+import { findMatches, type RowMatches } from '../analysis/motif/findpatterns'
 
 export interface ConservationRequest {
   flat: Uint8Array // row-major: flat[row * width + col]
@@ -97,6 +98,36 @@ export function computeTree(req: TreeRequest): { tree: PhyloTree } {
   const rows: Uint8Array[] = []
   for (let r = 0; r < nRows; r++) rows.push(flat.subarray(r * width, (r + 1) * width))
   return { tree: buildTree(rows, width, req.options) }
+}
+
+// ---- motif search --------------------------------------------------------
+
+export interface MotifRequest {
+  flat: Uint8Array
+  nRows: number
+  width: number
+  /** RegExp source produced by compilePattern (rebuilt here, global-flagged). */
+  source: string
+}
+
+export interface MotifResult {
+  /** Per-row aligned match ranges, in row-major order (row index === request row). */
+  matches: RowMatches[]
+}
+
+/**
+ * Run a compiled motif pattern over every row off the main thread. The pattern
+ * arrives as a RegExp source string (structured-clone-safe) and is rebuilt into
+ * a global RegExp here. This is the O(rows × cols) sweep that used to jank the UI
+ * thread on large alignments.
+ */
+export function computeMotif(req: MotifRequest): MotifResult {
+  const { flat, nRows, width, source } = req
+  const rows: Uint8Array[] = []
+  for (let r = 0; r < nRows; r++) rows.push(flat.subarray(r * width, (r + 1) * width))
+  const regex = new RegExp(source, 'g')
+  const compiled = { ok: true as const, regex, source, anchoredStart: false, anchoredEnd: false }
+  return { matches: findMatches(rows, compiled) }
 }
 
 /** Transferable buffers in a conservation result (for postMessage). */

@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from 'react'
-import { ActionIcon, Button, Group, Select, Text } from '@mantine/core'
-import { IconX } from '@tabler/icons-react'
+import { Button, Group, Select, Text } from '@mantine/core'
 import type { EditorController } from '../editor/EditorController'
 import type { AlignController } from '../align/AlignController'
 import { useEditorSnapshot } from './useEditor'
+import { FloatingPanel } from './panel/FloatingPanel'
 
 interface Props {
   ctrl: EditorController
@@ -31,22 +31,27 @@ export function AlignPanel({ ctrl, align, onClose, onToast }: Props) {
   }
 
   return (
-    <div className="align-panel">
-      <div className="panel-head">
-        <span className="panel-title">Re-align</span>
+    <FloatingPanel
+      panelKey="align"
+      title="Re-align"
+      onClose={onClose}
+      defaultPos="top-right"
+      defaultSize={{ w: 300, h: 180 }}
+      minSize={{ w: 260, h: 150 }}
+      maxSize={{ w: 460, h: 340 }}
+      resize="width"
+      controls={
         <Select
           size="xs"
-          w={160}
+          w={150}
           disabled={state.busy}
           data={state.aligners.map((a) => ({ value: a.id, label: a.label + (a.needsNetwork ? ' · online' : '') }))}
           value={state.alignerId}
           onChange={(v) => v && align.setAligner(v)}
           allowDeselect={false}
         />
-        <ActionIcon variant="subtle" color="gray" onClick={onClose} aria-label="Hide re-align">
-          <IconX size={16} />
-        </ActionIcon>
-      </div>
+      }
+    >
       <div className="align-body">
         <Group gap="xs">
           <Button variant="default" disabled={!canRun} onClick={() => void run(false)}>
@@ -77,6 +82,6 @@ export function AlignPanel({ ctrl, align, onClose, onToast }: Props) {
           </Text>
         )}
       </div>
-    </div>
+    </FloatingPanel>
   )
 }

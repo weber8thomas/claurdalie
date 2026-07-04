@@ -34,6 +34,7 @@ import { TreeModel } from './tree/TreeModel'
 import type { SerializableModule } from './project/types'
 import { loadPrefs, savePrefs } from './editor/persistence'
 import { usePanels } from './ui/panelsStore'
+import { DockRail } from './ui/panel/DockRail'
 import type { Hit } from './render/GridRenderer'
 import type { HoverPayload } from './editor/interaction'
 
@@ -63,26 +64,21 @@ export default function App() {
     const p = loadPrefs()
     return { w: p.minimapW ?? 180, h: p.minimapH ?? 120 }
   })
-  const [structureSize, setStructureSize] = useState(() => {
-    const p = loadPrefs()
-    return { w: p.structureW ?? 380, h: p.structureH ?? 460 }
-  })
   const [hover, setHover] = useState<HoverPayload | null>(null)
 
   const showToast = useCallback((msg: string) => {
     notifications.show({ message: msg, autoClose: 2400, withBorder: true })
   }, [])
 
-  // Panel-size prefs stay here (the visibility bools persist via panelsStore).
+  // Panel-size prefs for the still-bespoke panels (minimap box + scores strip).
+  // FloatingPanel windows persist their own geometry via panelsStore.
   useEffect(() => {
     savePrefs({
       scoresH,
       minimapW: minimapSize.w,
       minimapH: minimapSize.h,
-      structureW: structureSize.w,
-      structureH: structureSize.h,
     })
-  }, [scoresH, minimapSize, structureSize])
+  }, [scoresH, minimapSize])
 
   // The structure controller lives alongside the editor and survives panel
   // open/close so a folded structure isn't lost when the panel is toggled.
@@ -117,7 +113,12 @@ export default function App() {
     // Per-group conservation tracks: feed group subsets to the conservation model
     // and recompute shown tracks whenever the grouping changes.
     model.setGroupProvider(() => groupModel.groups().map((g) => ({ id: g.clusterId, rows: g.rows })))
-    const offGroups = groupModel.subscribe(() => model.refresh())
+    // Motif "per group" scope highlights one representative row per group.
+    motifModel.setGroupProvider(() => groupModel.groups().map((g) => ({ rows: g.rows })))
+    const offGroups = groupModel.subscribe(() => {
+      model.refresh()
+      motifModel.onGroupsChanged()
+    })
 
     const host: ProjectHost = {
       captureSequences: () => ctrl.store.toSequences(),
@@ -300,9 +301,6 @@ export default function App() {
             ctrl={ctrl}
             structure={structure}
             hover={hover}
-            width={structureSize.w}
-            height={structureSize.h}
-            onResize={(w, h) => setStructureSize({ w, h })}
             onClose={() => panels.set('structure', false)}
             onToast={showToast}
           />
@@ -347,6 +345,7 @@ export default function App() {
         />
       )}
       {ctrl && hover && panels.tooltip && !menu && <AATooltip ctrl={ctrl} hover={hover} variant={variant} />}
+      <DockRail />
       </div>
     </MantineProvider>
   )

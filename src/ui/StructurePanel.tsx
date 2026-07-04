@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSyncExternalStore } from 'react'
-import { ActionIcon, Button, SegmentedControl } from '@mantine/core'
+import { ActionIcon, Button, HoverCard, SegmentedControl, Text } from '@mantine/core'
 import {
+  IconArrowBackUp,
+  IconChevronDown,
+  IconChevronRight,
   IconEye,
   IconEyeOff,
-  IconMaximize,
-  IconMinimize,
   IconPhoto,
   IconRefresh,
   IconX,
@@ -15,6 +16,7 @@ import type { StructureController } from '../structure/StructureController'
 import { createStructureViewer, type StructureViewer, type ColorMode, type Representation } from '../structure/viewer'
 import { useEditorSnapshot } from './useEditor'
 import type { HoverPayload } from '../editor/interaction'
+import { FloatingPanel } from './panel/FloatingPanel'
 
 const MIN_W = 240
 const MIN_H = 240
@@ -25,9 +27,6 @@ interface Props {
   ctrl: EditorController
   structure: StructureController
   hover: HoverPayload | null
-  width: number
-  height: number
-  onResize: (w: number, h: number) => void
   onClose: () => void
   onToast: (msg: string) => void
 }
@@ -51,7 +50,15 @@ const VIEWS: { id: Representation; label: string }[] = [
   { id: 'sphere', label: 'Sphere' },
 ]
 
-export function StructurePanel({ ctrl, structure, hover, width, height, onResize, onClose, onToast }: Props) {
+/** AlphaFold-style pLDDT confidence band color for a mean score (0..100). */
+function plddtBand(b: number): string {
+  if (b >= 90) return '#0053d6'
+  if (b >= 70) return '#65cbf3'
+  if (b >= 50) return '#ffdb13'
+  return '#ff7d45'
+}
+
+export function StructurePanel({ ctrl, structure, hover, onClose, onToast }: Props) {
   const snap = useEditorSnapshot(ctrl)
   const st = useStructureState(structure)
   const hostRef = useRef<HTMLDivElement>(null)
@@ -60,7 +67,7 @@ export function StructurePanel({ ctrl, structure, hover, width, height, onResize
   const viewerRef = useRef<StructureViewer | null>(null)
   const [viewerReady, setViewerReady] = useState(false)
   const [viewerError, setViewerError] = useState<string | null>(null)
-  const [fullscreen, setFullscreen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   // Create the dynamically-imported WebGL viewer once.
   useEffect(() => {
@@ -83,6 +90,16 @@ export function StructurePanel({ ctrl, structure, hover, width, height, onResize
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Keep the GL canvas in step with the panel body size (drag-resize, fullscreen,
+  // dock) without threading width/height props — the FloatingPanel owns geometry.
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host || !viewerReady) return
+    const ro = new ResizeObserver(() => viewerRef.current?.resize())
+    ro.observe(host)
+    return () => ro.disconnect()
+  }, [viewerReady])
+
   // Reconcile models whenever the set changes; re-center to include new ones.
   useEffect(() => {
     if (viewerReady) viewerRef.current?.setModels(structure.viewerModels(), true)
@@ -103,11 +120,6 @@ export function StructurePanel({ ctrl, structure, hover, width, height, onResize
     v.highlightResidue(t?.modelId ?? null, t?.index ?? null)
   }, [hover, st.focus, viewerReady, st.modelsRev, structure])
 
-  // Resize the GL canvas when the panel box or fullscreen state changes.
-  useEffect(() => {
-    viewerRef.current?.resize()
-  }, [width, height, fullscreen])
-
   const foldActive = () => {
     const selected = ctrl.selectedRowIdsInOrder()
     const ids = selected.length ? selected : snap.cursor ? [ctrl.store.rowIdAt(snap.cursor.row)] : []
@@ -126,49 +138,19 @@ export function StructurePanel({ ctrl, structure, hover, width, height, onResize
     onToast('Saved structure.png')
   }
 
-  const startResize = (e: React.PointerEvent) => {
-    e.stopPropagation()
-    e.currentTarget.setPointerCapture(e.pointerId)
-    const sx = e.clientX
-    const sy = e.clientY
-    const sw = width
-    const sh = height
-    const move = (ev: PointerEvent) => {
-      // Bottom-left handle on a top-right-anchored panel: left edge & bottom edge.
-      const w = Math.max(MIN_W, Math.min(MAX_W, sw - (ev.clientX - sx)))
-      const h = Math.max(MIN_H, Math.min(MAX_H, sh + (ev.clientY - sy)))
-      onResize(Math.round(w), Math.round(h))
-    }
-    const up = () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-      viewerRef.current?.resize()
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-  }
-
-  const boxStyle = fullscreen ? undefined : { width, height }
-
   return (
-    <div className={'structure-panel' + (fullscreen ? ' fullscreen' : '')} style={boxStyle}>
-      {!fullscreen && <div className="sp-resize-bl" title="Resize" onPointerDown={startResize} />}
-      <div className="sp-head">
-        <span className="panel-title">3D structure</span>
-        <ActionIcon
-          variant="subtle"
-          color="gray"
-          title={fullscreen ? 'Exit full screen' : 'Full screen'}
-          onClick={() => setFullscreen((f) => !f)}
-          aria-label="Toggle full screen"
-        >
-          {fullscreen ? <IconMinimize size={16} /> : <IconMaximize size={16} />}
-        </ActionIcon>
-        <ActionIcon variant="subtle" color="gray" title="Hide structure panel" onClick={onClose} aria-label="Close">
-          <IconX size={16} />
-        </ActionIcon>
-      </div>
-
+    <FloatingPanel
+      panelKey="structure"
+      title="3D structure"
+      onClose={onClose}
+      defaultPos="top-right"
+      defaultSize={{ w: 380, h: 460 }}
+      minSize={{ w: MIN_W, h: MIN_H }}
+      maxSize={{ w: MAX_W, h: MAX_H }}
+      resize="both"
+      onGeometryChange={() => viewerRef.current?.resize()}
+      bodyClassName="structure-fp"
+    >
       <div className="sp-toolbar">
         <Button size="compact-xs" onClick={foldActive} loading={st.busy} disabled={snap.rows === 0} title="Fold the selected sequence(s) via ESMFold (online)">
           {ctrl.selectedRowCount() > 1 ? `Fold ${ctrl.selectedRowCount()}` : 'Fold sequence'}
@@ -233,12 +215,47 @@ export function StructurePanel({ ctrl, structure, hover, width, height, onResize
       {st.models.length > 0 && (
         <div className="sp-models">
           {st.models.map((m) => (
-            <div className={'sp-model' + (m.visible ? '' : ' hidden')} key={m.id} title={m.origin + (m.note ? ` — ${m.note}` : '')}>
-              <span className="sp-swatch" style={{ background: m.color }} />
-              <span className="sp-model-name">{m.label}</span>
-              <span className="sp-model-meta">
-                {m.residues} res{m.linked ? ' · linked' : ''}{m.kind === 'compare' ? ' · cmp' : ''}
-              </span>
+            <div className={'sp-model' + (m.visible ? '' : ' hidden')} key={m.id}>
+              <HoverCard width={240} shadow="md" openDelay={120} withArrow position="left">
+                <HoverCard.Target>
+                  <div className="sp-model-info">
+                    <span className="sp-swatch" style={{ background: m.color }} />
+                    <span className="sp-model-name">{m.label}</span>
+                    <span className="sp-model-meta">
+                      {m.residues} res{m.meanPlddt != null ? ` · pLDDT ${Math.round(m.meanPlddt)}` : ''}
+                    </span>
+                  </div>
+                </HoverCard.Target>
+                <HoverCard.Dropdown>
+                  <Text fz="sm" fw={600}>
+                    {m.label}
+                  </Text>
+                  <Text fz="xs" c="dimmed">
+                    {m.origin} · {m.kind}
+                    {m.linked ? ' · linked to alignment' : ''}
+                  </Text>
+                  <Text fz="xs" mt={4}>
+                    {m.residues} residues
+                    {m.meanPlddt != null ? (
+                      <>
+                        {' · '}
+                        <span
+                          className="sp-plddt-chip"
+                          style={{ background: plddtBand(m.meanPlddt) }}
+                        />
+                        mean pLDDT {m.meanPlddt.toFixed(1)}
+                      </>
+                    ) : (
+                      ' · no confidence score'
+                    )}
+                  </Text>
+                  {m.note && (
+                    <Text fz="xs" mt={4} c="dimmed">
+                      {m.note}
+                    </Text>
+                  )}
+                </HoverCard.Dropdown>
+              </HoverCard>
               <ActionIcon
                 variant="subtle"
                 color={m.visible ? 'teal' : 'gray'}
@@ -262,6 +279,56 @@ export function StructurePanel({ ctrl, structure, hover, width, height, onResize
           )}
         </div>
       )}
-    </div>
+
+      {st.history.length > 0 && (
+        <div className="sp-history">
+          <button className="sp-history-head" onClick={() => setHistoryOpen((o) => !o)} aria-expanded={historyOpen}>
+            {historyOpen ? <IconChevronDown size={13} /> : <IconChevronRight size={13} />}
+            <span>Session history ({st.history.length})</span>
+            {historyOpen && (
+              <span
+                className="sp-history-clear"
+                role="button"
+                tabIndex={0}
+                title="Clear history"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  structure.clearHistory()
+                }}
+              >
+                clear
+              </span>
+            )}
+          </button>
+          {historyOpen && (
+            <div className="sp-history-list">
+              {st.history.map((h) => (
+                <div className={'sp-hist-item' + (h.present ? ' present' : '')} key={h.id}>
+                  <span className="sp-swatch" style={{ background: h.color }} />
+                  <span className="sp-model-name">{h.label}</span>
+                  <span className="sp-model-meta">
+                    {h.residues} res{h.meanPlddt != null ? ` · ${Math.round(h.meanPlddt)}` : ''}
+                  </span>
+                  {h.present ? (
+                    <span className="sp-hist-tag">shown</span>
+                  ) : (
+                    <ActionIcon
+                      variant="subtle"
+                      color="teal"
+                      size="sm"
+                      title="Re-show this structure"
+                      onClick={() => structure.restoreFromHistory(h.id)}
+                      aria-label="Re-show structure"
+                    >
+                      <IconArrowBackUp size={14} />
+                    </ActionIcon>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </FloatingPanel>
   )
 }

@@ -2,7 +2,7 @@ import { ALPHABET_SIZE, GAP_CODE } from '../core/alphabet'
 import { residueOf } from '../core/AlignmentStore'
 import type { AlignmentStore } from '../core/AlignmentStore'
 import type { ColumnStats, ColumnStatsCache } from '../core/stats/ColumnStats'
-import { toCss, type ColorScheme, type RGB } from '../color/scheme'
+import { rgb, toCss, type ColorScheme, type RGB } from '../color/scheme'
 import { GlyphAtlas } from './GlyphAtlas'
 import { LIGHT_CANVAS, type CanvasTheme } from './theme'
 import { clamp, computeVisible, maxScroll } from './viewport'
@@ -11,6 +11,7 @@ export const GUTTER_W = 156
 export const RULER_H = 22
 export const SB = 11 // scrollbar thickness
 const TEXT_THRESHOLD = 6 // px/cell below which we stop drawing letters (block mode)
+const MATCH_GLYPH: RGB = rgb(255, 255, 255) // white letters over the motif red band
 
 export interface ScrollbarHit {
   axis: 'h' | 'v'
@@ -536,6 +537,12 @@ export class GridRenderer {
    * Motif match overlay: mute the whole grid with a dark wash and paint matched
    * residue bands in red (Ordalie's high-contrast Find mode). Drawn over the
    * cells but under selection/cursor chrome, clipped to the grid rect.
+   *
+   * The red band is drawn OVER the already-painted cell glyphs, so — when zoomed
+   * in enough to show letters — the matched residue letters are re-blitted in
+   * white on top of the band; otherwise the highlighted letter would be buried
+   * under the red and unreadable. In block mode (no letters) the band stays a
+   * solid red as before.
    */
   private paintMatchOverlay(vis: ReturnType<typeof computeVisible>): void {
     const o = this.matchOverlay
@@ -561,6 +568,33 @@ export class GridRenderer {
         if (b <= a) continue
         const x = this.cellX(a)
         ctx.fillRect(x, y, this.cellX(b) - x, h)
+      }
+    }
+    // Re-draw the matched residue letters in white so they stay legible on the
+    // red band. Only when cells are large enough to carry glyphs (mirrors the
+    // TEXT_THRESHOLD gate in paintCells); the atlas is already configured for the
+    // current cell size by paint().
+    const showText = this.cellW >= TEXT_THRESHOLD && this.cellH >= TEXT_THRESHOLD
+    if (showText) {
+      const white = this.atlas.atlas(MATCH_GLYPH)
+      const dw = this.cellW
+      const dh = this.cellH
+      const gw = this.atlas.cellGlyphWidth
+      const gh = this.atlas.cellGlyphHeight
+      for (let v = vis.firstRow; v < vis.lastRow; v++) {
+        const ranges = o.rangesOf(v)
+        if (!ranges.length) continue
+        const y = this.cellY(v)
+        const row = this.store.getRow(this.store.rowIdAt(v))
+        for (const [c0, c1] of ranges) {
+          const a = Math.max(c0, vis.firstCol)
+          const b = Math.min(c1, vis.lastCol)
+          for (let c = a; c < b; c++) {
+            const code = residueOf(row, c)
+            if (code === GAP_CODE) continue
+            ctx.drawImage(white as unknown as CanvasImageSource, this.atlas.glyphX(code), 0, gw, gh, this.cellX(c), y, dw, dh)
+          }
+        }
       }
     }
     ctx.restore()

@@ -4,6 +4,17 @@ const PREFS = 'claurdalie.prefs'
 const ALN = 'claurdalie.aln'
 const KIND = 'claurdalie.alnKind' // 'content' | 'demo' | 'heavy' | 'huge'
 
+/** Persisted geometry for one floating/dockable panel window. */
+export interface PanelWindowPref {
+  x: number
+  y: number
+  w: number
+  h: number
+  pinned?: boolean
+  docked?: boolean
+  fullscreen?: boolean
+}
+
 export interface Prefs {
   dark?: boolean
   schemeId?: string
@@ -18,6 +29,8 @@ export interface Prefs {
   showScores?: boolean
   scoresH?: number
   showBarcode?: boolean
+  /** Per-panel window geometry (position/size/pin/dock/fullscreen), keyed by PanelKey. */
+  panelWindows?: Record<string, PanelWindowPref>
 }
 
 export function loadPrefs(): Prefs {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { ActionIcon, Button, Checkbox, Select, TextInput } from '@mantine/core'
-import { IconSearch, IconX } from '@tabler/icons-react'
+import { Button, Checkbox, NumberInput, Select, TextInput } from '@mantine/core'
+import { IconSearch } from '@tabler/icons-react'
+import { FloatingPanel } from './panel/FloatingPanel'
 import type { EditorController } from '../editor/EditorController'
 import type { TreeModel, TreeColorBy } from '../tree/TreeModel'
 import type { GroupModel } from '../analysis/cluster/GroupModel'
@@ -28,7 +29,8 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
   const snap = useEditorSnapshot(ctrl)
   useSyncExternalStore(
     (fn) => model.subscribe(fn),
-    () => `${model.mode}|${model.colorBy}|${model.showBootstrap}|${model.branchLengths}|${model.isComputing()}|${model.version()}`,
+    () =>
+      `${model.mode}|${model.colorBy}|${model.showBootstrap}|${model.branchLengths}|${model.showDistances}|${model.bootstrapThreshold}|${model.isComputing()}|${model.version()}`,
   )
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -134,6 +136,16 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
               ctx.lineTo(x1, y1)
             }
             ctx.stroke()
+            // Branch-length label along the horizontal (child) segment.
+            if (model.showDistances && Math.abs(x1 - cornerX) > 22) {
+              ctx.save()
+              ctx.fillStyle = th.muted
+              ctx.font = `10px ${th.font}`
+              ctx.textAlign = 'center'
+              ctx.textBaseline = 'bottom'
+              ctx.fillText(fmtNum(c.length), (cornerX + x1) / 2, y1 - 2)
+              ctx.restore()
+            }
           }
         }
         const leafSpacing = layout.leafCount > 1 ? plotH / (layout.leafCount - 1) : plotH
@@ -168,6 +180,15 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
             ctx.moveTo(p0.x, p0.y)
             ctx.lineTo(p1.x, p1.y)
             ctx.stroke()
+            if (model.showDistances && k.node.children.length > 0) {
+              ctx.save()
+              ctx.fillStyle = th.muted
+              ctx.font = `10px ${th.font}`
+              ctx.textAlign = 'center'
+              ctx.textBaseline = 'middle'
+              ctx.fillText(fmtNum(k.node.length), (p0.x + p1.x) / 2, (p0.y + p1.y) / 2 - 5)
+              ctx.restore()
+            }
           }
         }
         drawDecorations(ctx, nodes, (n) => polar(n.radius, n.angle), tree, model, deco, { dendro: false, maxLabelW: 150, leafSpacing: Infinity })
@@ -219,7 +240,9 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
     const canvas = canvasRef.current
     if (!tree || !canvas) return
     const { mx, my } = localXY(e)
-    const hit = hitTest(canvas, model, mx, my)
+    // Prefer a node hit; fall back to the nearest branch segment so hovering the
+    // branch line itself surfaces its distance.
+    const hit = hitTest(canvas, model, mx, my) ?? edgeHitTest(canvas, model, mx, my)
     if (hit === null) {
       if (hover) setHover(null)
       return
@@ -313,13 +336,18 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
   const hasTree = !!tree
 
   return (
-    <div className="tree-panel">
-      <div className="tree-head">
-        <span className="panel-title">Phylogenetic tree</span>
-        <ActionIcon variant="subtle" color="gray" onClick={onClose} aria-label="Close">
-          <IconX size={16} />
-        </ActionIcon>
-      </div>
+    <FloatingPanel
+      panelKey="tree"
+      title="Phylogenetic tree"
+      onClose={onClose}
+      defaultPos={{ x: Math.max(16, (typeof window !== 'undefined' ? window.innerWidth : 1200) / 2 - 450), y: 56 }}
+      defaultSize={{ w: 900, h: 560 }}
+      minSize={{ w: 420, h: 320 }}
+      maxSize={{ w: 1600, h: 1000 }}
+      resize="both"
+      onGeometryChange={() => (canvasRef.current as unknown as { __draw?: () => void })?.__draw?.()}
+      bodyClassName="tree-fp"
+    >
       <div className="tree-controls">
         <Button size="compact-xs" onClick={() => void buildTree()} loading={model.isComputing()}>
           Build
@@ -368,6 +396,19 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
           checked={model.showBootstrap}
           onChange={(e) => model.setShowBootstrap(e.currentTarget.checked)}
         />
+        {model.showBootstrap && (
+          <NumberInput
+            size="xs"
+            w={78}
+            min={0}
+            max={1}
+            step={0.05}
+            decimalScale={2}
+            title="Support threshold: nodes at/above show an accent disc, below a warning disc"
+            value={model.bootstrapThreshold}
+            onChange={(v) => model.setBootstrapThreshold(typeof v === 'number' ? v : Number(v) || 0)}
+          />
+        )}
       </div>
       <div className="tree-controls tree-controls-2">
         <TextInput
@@ -389,6 +430,13 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
           title="Scale branches by evolutionary distance (phylogram) vs equal steps (cladogram)"
           checked={model.branchLengths}
           onChange={(e) => model.setBranchLengths(e.currentTarget.checked)}
+        />
+        <Checkbox
+          size="xs"
+          label="Distances"
+          title="Label each branch with its evolutionary distance"
+          checked={model.showDistances}
+          onChange={(e) => model.setShowDistances(e.currentTarget.checked)}
         />
         <div className="tree-spacer" />
         <Button size="compact-xs" variant="default" onClick={() => void copyNewick()} disabled={!hasTree} title="Copy Newick to clipboard">
@@ -432,7 +480,7 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
         <span className="tree-spacer" />
         <span className="tree-hint">drag pan · wheel zoom · click re-root · shift swap · alt-click 2 tips to measure</span>
       </div>
-    </div>
+    </FloatingPanel>
   )
 }
 
@@ -664,6 +712,74 @@ function hitTest(canvas: HTMLCanvasElement, model: TreeModel, mx: number, my: nu
     for (const ln of layout.nodes.values()) {
       const { x, y } = radialXY(ln)
       consider(cx + x * R, cy + y * R, ln.node.id)
+    }
+  }
+  return best
+}
+
+/** Squared distance from point (px,py) to segment (ax,ay)-(bx,by). */
+function segDist2(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax
+  const dy = by - ay
+  const len2 = dx * dx + dy * dy
+  let t = len2 > 0 ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0
+  t = Math.max(0, Math.min(1, t))
+  const cx = ax + t * dx
+  const cy = ay + t * dy
+  return (px - cx) ** 2 + (py - cy) ** 2
+}
+
+/**
+ * Return the id of the child node whose branch SEGMENT is nearest (mx,my) within
+ * a small threshold, so hovering the branch line (not just the node) shows its
+ * distance. Mirrors the draw() edge geometry for both modes.
+ */
+function edgeHitTest(canvas: HTMLCanvasElement, model: TreeModel, mx: number, my: number): number | null {
+  const tree = model.current()
+  if (!tree) return null
+  const layout = layoutTree(tree, { cladogram: !model.branchLengths })
+  const dpr = window.devicePixelRatio || 1
+  const W = canvas.width / dpr
+  const H = canvas.height / dpr
+  const v = (canvas as any).__viewRef?.current ?? { scale: 1, ox: 0, oy: 0 }
+  let best: number | null = null
+  let bestD = 6 * 6
+  const seg = (ax: number, ay: number, bx: number, by: number, id: number) => {
+    const d = segDist2(mx, my, ax, ay, bx, by)
+    if (d < bestD) {
+      bestD = d
+      best = id
+    }
+  }
+  if (model.mode === 'dendrogram') {
+    const margin = 12
+    const labelW = 96
+    const plotW = (W - margin * 2 - labelW) * v.scale
+    const plotH = (H - margin * 2) * v.scale
+    const px = (x: number) => margin + v.ox + x * plotW
+    const py = (y: number) => margin + v.oy + y * plotH
+    for (const ln of layout.nodes.values()) {
+      for (const c of ln.node.children) {
+        const cl = layout.nodes.get(c.id)
+        if (!cl) continue
+        seg(px(ln.x), py(ln.y), px(ln.x), py(cl.y), c.id) // vertical connector
+        seg(px(ln.x), py(cl.y), px(cl.x), py(cl.y), c.id) // horizontal branch
+      }
+    }
+  } else {
+    const cx = W / 2 + v.ox
+    const cy = H / 2 + v.oy
+    const R = (Math.min(W, H) / 2 - 60) * v.scale
+    for (const ln of layout.nodes.values()) {
+      for (const c of ln.node.children) {
+        const cl = layout.nodes.get(c.id)
+        if (!cl) continue
+        const p0x = cx + ln.radius * R * Math.cos(cl.angle)
+        const p0y = cy + ln.radius * R * Math.sin(cl.angle)
+        const p1x = cx + cl.radius * R * Math.cos(cl.angle)
+        const p1y = cy + cl.radius * R * Math.sin(cl.angle)
+        seg(p0x, p0y, p1x, p1y, c.id) // radial spoke
+      }
     }
   }
   return best

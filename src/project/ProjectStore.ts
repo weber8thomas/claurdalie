@@ -128,7 +128,13 @@ export class ProjectStore {
     }
     this.snapshots.push(snap)
     this.activeId = snap.id
-    this.restore(snap)
+    // No restore(): a fresh fork is IDENTICAL to its parent, whose alignment +
+    // every module's state is already live and valid. Reloading the alignment and
+    // re-running each module's hydrate() (conservation recompute, variant rescore,
+    // tree reparse, group rescan) would only recompute state the live editor
+    // already shows — a pure main-thread stall on large alignments. The fork's
+    // stored copy above is only read on a future switchTo()/export(), each of which
+    // calls captureActive() first, so it never goes stale.
     this.emit()
   }
 

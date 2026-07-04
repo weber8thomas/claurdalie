@@ -25,6 +25,19 @@ import { CATEGORICAL } from '../color/palette'
 /** Distinct model colors from the shared categorical palette. */
 const MODEL_COLORS = CATEGORICAL
 
+/** Mean of the scored (non-null, finite) pLDDT values, or null when none. */
+function meanPlddt(plddt: (number | null)[]): number | null {
+  let sum = 0
+  let n = 0
+  for (const p of plddt) {
+    if (typeof p === 'number' && Number.isFinite(p)) {
+      sum += p
+      n++
+    }
+  }
+  return n > 0 ? sum / n : null
+}
+
 type ModelKind = 'fold' | 'file' | 'compare'
 
 interface StructureModel {
@@ -55,6 +68,21 @@ export interface ModelInfo {
   linked: boolean
   visible: boolean
   note?: string
+  /** Mean pLDDT (0..100) over scored residues, or null when the source has none. */
+  meanPlddt: number | null
+}
+
+/** A record in the session's structure-generation history (survives removal/reset). */
+export interface HistoryInfo {
+  id: string
+  label: string
+  kind: ModelKind
+  color: string
+  residues: number
+  meanPlddt: number | null
+  note?: string
+  /** True when this structure is currently loaded in the viewer's model set. */
+  present: boolean
 }
 
 export interface StructureState {
@@ -69,6 +97,8 @@ export interface StructureState {
   sourceLabel: string
   /** An externally-requested residue highlight (e.g. a variant), preferred over hover. */
   focus: { modelId: string; index: number } | null
+  /** Session log of every structure generated/loaded, most-recent first. */
+  history: HistoryInfo[]
 }
 
 export class StructureController {
@@ -77,6 +107,9 @@ export class StructureController {
   private models = new Map<string, StructureModel>()
   private fileCounter = 0
   private folding = false
+  /** Session-scoped log of generated/loaded structures; survives remove + reset. */
+  private history: StructureModel[] = []
+  private static readonly HISTORY_CAP = 24
 
   private state: StructureState = {
     models: [],
@@ -89,6 +122,7 @@ export class StructureController {
     representation: 'cartoon',
     sourceLabel: this.source.label,
     focus: null,
+    history: [],
   }
 
   private listeners = new Set<() => void>()
@@ -123,14 +157,36 @@ export class StructureController {
       linked: m.rowId != null,
       visible: m.visible,
       note: m.note,
+      meanPlddt: meanPlddt(m.structure.plddt),
     }))
   }
+  private historyInfos(): HistoryInfo[] {
+    return this.history.map((m) => ({
+      id: m.id,
+      label: m.label,
+      kind: m.kind,
+      color: m.color,
+      residues: m.structure.residueCount,
+      meanPlddt: meanPlddt(m.structure.plddt),
+      note: m.note,
+      present: this.models.has(m.id),
+    }))
+  }
+
+  /** Log a generated/loaded structure so it can be re-shown after removal/reset. */
+  private recordHistory(m: StructureModel): void {
+    this.history = this.history.filter((h) => h.id !== m.id)
+    this.history.unshift({ ...m })
+    if (this.history.length > StructureController.HISTORY_CAP) this.history.length = StructureController.HISTORY_CAP
+  }
+
   private emit(patch: Partial<StructureState> = {}, modelsChanged = false): void {
     this.state = {
       ...this.state,
       ...patch,
       models: this.modelInfos(),
       modelsRev: this.state.modelsRev + (modelsChanged ? 1 : 0),
+      history: this.historyInfos(),
     }
     this.version++
     for (const fn of this.listeners) fn()
@@ -207,6 +263,7 @@ export class StructureController {
       map: ResidueColumnMap.build(codes),
       note: input.substitutions > 0 ? `${input.substitutions} substituted` : undefined,
     })
+    this.recordHistory(this.models.get(id)!)
     this.emit({}, true)
   }
 
@@ -273,6 +330,7 @@ export class StructureController {
         note,
         deviation,
       })
+      this.recordHistory(this.models.get(id)!)
       this.folding = false
       // Show the difference immediately: deviation coloring + spotlight the site.
       this.emit(
@@ -294,6 +352,7 @@ export class StructureController {
       const structure = structureFromFile(pdbText, fileName)
       const id = `file:${++this.fileCounter}`
       this.models.set(id, { id, label: fileName, structure, color: this.nextColor(), kind: 'file', visible: true })
+      this.recordHistory(this.models.get(id)!)
       this.emit({ error: null, errorKind: null }, true)
     } catch (e) {
       const err = e instanceof FoldError ? e : new FoldError('invalid', String(e))
@@ -327,6 +386,7 @@ export class StructureController {
       }
       const id = `cmp:${++this.fileCounter}`
       this.models.set(id, { id, label: fileName, structure, color: this.nextColor(), kind: 'compare', visible: true, note, deviation })
+      this.recordHistory(this.models.get(id)!)
       this.emit({ error: null, errorKind: null }, true)
     } catch (e) {
       const err = e instanceof FoldError ? e : new FoldError('invalid', String(e))
@@ -344,6 +404,35 @@ export class StructureController {
     m.visible = !m.visible
     this.emit({}, true) // bump modelsRev so the panel reconciles the viewer
   }
+
+  /**
+   * Re-show a structure from the session history. If it's still loaded, just make
+   * it visible; otherwise re-insert the stored model. A fold whose source row no
+   * longer exists is re-added as a static (unlinked) model so it still renders.
+   */
+  restoreFromHistory(id: string): void {
+    const existing = this.models.get(id)
+    if (existing) {
+      existing.visible = true
+      this.emit({}, true)
+      return
+    }
+    const h = this.history.find((m) => m.id === id)
+    if (!h) return
+    const linkAlive = h.kind === 'fold' && h.rowId != null && this.rowExists(h.rowId)
+    const model: StructureModel = linkAlive
+      ? { ...h, visible: true, map: ResidueColumnMap.build(this.editor.store.materializeRow(h.rowId!)) }
+      : { ...h, kind: h.kind === 'fold' ? 'file' : h.kind, visible: true, rowId: undefined, map: undefined }
+    this.models.set(model.id, model)
+    this.emit({}, true)
+  }
+
+  /** Forget the session's structure history (does not touch loaded models). */
+  clearHistory(): void {
+    this.history = []
+    this.emit()
+  }
+
   clearAll(): void {
     this.models.clear()
     this.emit({ busy: false, busyMessage: null, error: null, errorKind: null }, true)

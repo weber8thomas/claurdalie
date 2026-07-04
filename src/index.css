@@ -43,6 +43,12 @@ body {
   font-size: 15px;
   letter-spacing: -0.01em;
   padding-right: var(--sp-2);
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.brand:hover {
+  color: var(--accent);
 }
 .brand-mark {
   display: block;
@@ -132,33 +138,9 @@ canvas.grid {
 }
 
 /* ---- 3D structure panel ------------------------------------------------- */
-.structure-panel {
-  position: absolute;
-  right: var(--sp-3);
-  top: var(--sp-3);
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--panel);
-  box-shadow: var(--shadow);
+/* The 3D viewport must fill the body (no scroll) so 3Dmol sizes to the panel. */
+.fp.structure-fp .fp-body {
   overflow: hidden;
-  z-index: 3;
-}
-.sp-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 6px 5px 22px;
-  border-bottom: 1px solid var(--border);
-}
-.structure-panel.fullscreen {
-  position: fixed;
-  inset: 0;
-  width: 100vw !important;
-  height: 100vh !important;
-  border-radius: 0;
-  z-index: 50;
 }
 .sp-toolbar {
   display: flex;
@@ -266,21 +248,75 @@ canvas.grid {
   color: var(--muted);
   white-space: nowrap;
 }
-.structure-panel .sp-resize-bl {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 16px;
-  height: 16px;
-  z-index: 4;
-  cursor: nesw-resize;
-  background:
-    linear-gradient(45deg, var(--accent) 0 3px, transparent 3px) no-repeat,
-    linear-gradient(45deg, transparent 4px, var(--accent) 4px 6px, transparent 6px) no-repeat;
-  opacity: 0.7;
+.sp-model-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  cursor: default;
 }
-.structure-panel .sp-resize-bl:hover {
-  opacity: 1;
+.sp-plddt-chip {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 3px;
+  vertical-align: middle;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.sp-history {
+  border-top: 1px solid var(--border);
+  padding: 2px 4px 4px;
+}
+.sp-history-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 4px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sp-history-clear {
+  margin-left: auto;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.sp-history-clear:hover {
+  color: var(--danger);
+}
+.sp-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.sp-hist-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.sp-hist-item:hover {
+  background: var(--hover);
+}
+.sp-hist-item.present {
+  opacity: 0.6;
+}
+.sp-hist-tag {
+  font-size: 10px;
+  color: var(--muted);
+  padding-right: 4px;
 }
 
 /* ---- legend ------------------------------------------------------------- */
@@ -549,38 +585,18 @@ kbd {
 }
 
 /* ---- clustering dialog -------------------------------------------------- */
-.cluster-dialog {
-  position: absolute;
-  top: var(--sp-3);
-  right: var(--sp-3);
-  width: 280px;
-  background: var(--panel);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
+.cluster-body {
   padding: 10px 12px;
-  z-index: 40;
   font-size: 12px;
 }
 
-/* Re-align panel (mirrors the cluster dialog's floating style). */
-.align-panel {
-  position: absolute;
-  top: var(--sp-3);
-  right: var(--sp-3);
-  width: 260px;
-  background: var(--panel);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
-  padding: 10px 12px;
-  z-index: 40;
-  font-size: 12px;
-}
+/* Re-align panel body. */
 .align-body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
 }
 .align-btn.primary {
   border-color: var(--accent);
@@ -647,27 +663,10 @@ kbd {
 }
 
 /* ---- phylogenetic tree panel ------------------------------------------- */
-.tree-panel {
-  position: absolute;
-  top: var(--sp-3);
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(900px, 94%);
-  height: min(70vh, 560px);
-  display: flex;
-  flex-direction: column;
-  background: var(--panel);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
-  z-index: 45;
-}
-.tree-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
+/* Tree body fills the panel (controls + canvas + footer); the canvas must not
+   live inside a scroll container or it can't measure its flex height. */
+.fp.tree-fp .fp-body {
+  overflow: hidden;
 }
 .tree-controls {
   display: flex;
@@ -813,17 +812,8 @@ kbd {
 }
 
 /* ---- v0.8: motif search ------------------------------------------------- */
-.motif-panel {
-  position: absolute;
-  top: var(--sp-3);
-  right: var(--sp-3);
-  width: 300px;
-  background: var(--panel);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
+.motif-body {
   padding: 10px 12px;
-  z-index: 40;
   font-size: 12px;
 }
 
@@ -971,18 +961,8 @@ kbd {
 }
 
 /* ---- v0.9: variant / mutation-effect panel ----------------------------- */
-.variant-panel {
-  position: absolute;
-  top: var(--sp-3);
-  right: var(--sp-3);
-  width: 440px;
-  max-width: calc(100vw - 2 * var(--sp-3));
-  background: var(--panel);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
+.variant-body {
   padding: 10px 12px;
-  z-index: 40;
   font-size: 12px;
 }
 .variant-add {
@@ -1205,4 +1185,140 @@ kbd {
   font-weight: 600;
   font-size: 12px;
   flex: 1 1 auto;
+}
+
+/* ---- v0.10: unified floating / dockable panel chrome -------------------- */
+:root {
+  --z-panel-base: 20;
+  --z-rail: 110;
+  --z-panel-pinned: 120;
+  --z-fullscreen: 200;
+}
+.fp {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  z-index: var(--z-panel-base);
+}
+.fp-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 10px;
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+  user-select: none;
+  flex: 0 0 auto;
+  touch-action: none;
+}
+.fp-head:active {
+  cursor: grabbing;
+}
+.fp.fullscreen .fp-head,
+.fp.docked .fp-head {
+  cursor: default;
+}
+.fp-title {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fp-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+.fp.fullscreen {
+  inset: 0;
+  width: 100vw !important;
+  height: 100vh !important;
+  border-radius: 0;
+  z-index: var(--z-fullscreen);
+}
+.fp.docked {
+  position: relative;
+  width: 100%;
+  box-shadow: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  z-index: auto;
+}
+/* Resize handles (skipped in fullscreen). */
+.fp-rz {
+  position: absolute;
+  z-index: 3;
+}
+.fp-rz-n { top: -3px; left: 10px; right: 10px; height: 8px; cursor: ns-resize; }
+.fp-rz-s { bottom: -3px; left: 10px; right: 10px; height: 8px; cursor: ns-resize; }
+.fp-rz-e { right: -3px; top: 10px; bottom: 10px; width: 8px; cursor: ew-resize; }
+.fp-rz-w { left: -3px; top: 10px; bottom: 10px; width: 8px; cursor: ew-resize; }
+.fp-rz-ne { top: -3px; right: -3px; width: 13px; height: 13px; cursor: nesw-resize; }
+.fp-rz-nw { top: -3px; left: -3px; width: 13px; height: 13px; cursor: nwse-resize; }
+.fp-rz-se { bottom: -3px; right: -3px; width: 13px; height: 13px; cursor: nwse-resize; }
+.fp-rz-sw { bottom: -3px; left: -3px; width: 13px; height: 13px; cursor: nesw-resize; }
+/* Docked panels are resized in height only, from the bottom edge. */
+.fp.docked .fp-rz-n { display: none; }
+/* Keep canvases from swallowing pointermove while a panel drag/resize is live. */
+body.fp-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+body.fp-dragging .fp-body canvas,
+body.fp-dragging .fp-body .sp-host {
+  pointer-events: none;
+}
+
+/* Right-side dock rail ("volet"). */
+.dock-rail {
+  position: fixed;
+  top: 46px;
+  right: 0;
+  bottom: 0;
+  width: 360px;
+  display: none;
+  flex-direction: column;
+  background: var(--panel-2);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-rail);
+}
+.dock-rail.active {
+  display: flex;
+}
+.dock-rail.collapsed {
+  width: 38px;
+}
+.dock-rail-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.dock-rail-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.dock-rail-slot {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+.dock-rail-slot .fp {
+  flex: 0 0 auto;
 }

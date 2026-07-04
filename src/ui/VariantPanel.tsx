@@ -5,6 +5,7 @@ import type { EditorController } from '../editor/EditorController'
 import type { StructureController } from '../structure/StructureController'
 import type { VariantModel } from '../analysis/variant/VariantModel'
 import { impactColor, type Variant } from '../analysis/variant/types'
+import { FloatingPanel } from './panel/FloatingPanel'
 
 interface Props {
   ctrl: EditorController
@@ -85,10 +86,25 @@ export function VariantPanel({ ctrl, structure, model, prefill, onConsumePrefill
 
   const scoreAll = () => void model.scoreAll()
 
+  const foldableCount = structure ? results.filter((r) => r.visualRow >= 0 && model.canFold(r.variant)).length : 0
+  const foldAll = () => {
+    if (!structure) return
+    const foldable = results.filter((r) => r.visualRow >= 0 && model.canFold(r.variant))
+    for (const r of foldable) void model.foldMutant(r.variant)
+    onToast?.(`Folding ${foldable.length} variant${foldable.length > 1 ? 's' : ''} — open the 3D panel to compare`)
+  }
+
   return (
-    <div className="variant-panel">
-      <div className="panel-head">
-        <span className="panel-title">Variants</span>
+    <FloatingPanel
+      panelKey="variant"
+      title="Variants"
+      onClose={onClose}
+      defaultPos="top-right"
+      defaultSize={{ w: 460, h: 460 }}
+      minSize={{ w: 360, h: 260 }}
+      maxSize={{ w: 760, h: 820 }}
+      resize="both"
+      controls={
         <Select
           size="xs"
           w={150}
@@ -98,11 +114,9 @@ export function VariantPanel({ ctrl, structure, model, prefill, onConsumePrefill
           onChange={(v) => v && model.setSource(v)}
           allowDeselect={false}
         />
-        <ActionIcon variant="subtle" color="gray" onClick={onClose} aria-label="Close">
-          <IconX size={16} />
-        </ActionIcon>
-      </div>
-
+      }
+    >
+      <div className="variant-body">
       {/* Add form */}
       <div className="variant-add">
         <Select
@@ -178,6 +192,17 @@ export function VariantPanel({ ctrl, structure, model, prefill, onConsumePrefill
         {results.length > 0 && (
           <Button size="compact-xs" variant="default" onClick={() => model.clear()} title="Remove all variants">
             Clear
+          </Button>
+        )}
+        {foldableCount > 0 && (
+          <Button
+            size="compact-xs"
+            variant="default"
+            disabled={structBusy}
+            onClick={foldAll}
+            title="Fold every foldable variant's mutant & overlay them in 3D (online)"
+          >
+            {`Fold all (${foldableCount})`}
           </Button>
         )}
         <input
@@ -302,7 +327,8 @@ export function VariantPanel({ ctrl, structure, model, prefill, onConsumePrefill
           </table>
         </div>
       )}
-    </div>
+      </div>
+    </FloatingPanel>
   )
 }
 

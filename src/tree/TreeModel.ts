@@ -25,6 +25,8 @@ interface TreeSlice {
   colorBy: TreeColorBy
   showBootstrap: boolean
   branchLengths?: boolean
+  showDistances?: boolean
+  bootstrapThreshold?: number
 }
 
 export class TreeModel implements SerializableModule<TreeSlice | null> {
@@ -42,6 +44,8 @@ export class TreeModel implements SerializableModule<TreeSlice | null> {
   bootstrapThreshold = 0.8
   /** Dendrogram scales edges by branch length (phylogram) when true. */
   branchLengths = true
+  /** Draw the numeric branch length as a label along each edge. */
+  showDistances = false
 
   constructor(private ctrl: EditorController) {}
 
@@ -94,6 +98,14 @@ export class TreeModel implements SerializableModule<TreeSlice | null> {
   }
   setBranchLengths(v: boolean): void {
     this.branchLengths = v
+    this.emit()
+  }
+  setShowDistances(v: boolean): void {
+    this.showDistances = v
+    this.emit()
+  }
+  setBootstrapThreshold(v: number): void {
+    this.bootstrapThreshold = Math.max(0, Math.min(1, v))
     this.emit()
   }
 
@@ -197,6 +209,8 @@ export class TreeModel implements SerializableModule<TreeSlice | null> {
       colorBy: this.colorBy,
       showBootstrap: this.showBootstrap,
       branchLengths: this.branchLengths,
+      showDistances: this.showDistances,
+      bootstrapThreshold: this.bootstrapThreshold,
     }
   }
   hydrate(state: TreeSlice | null | undefined): void {
@@ -209,6 +223,8 @@ export class TreeModel implements SerializableModule<TreeSlice | null> {
       this.colorBy = state.colorBy
       this.showBootstrap = state.showBootstrap
       this.branchLengths = state.branchLengths ?? true
+      this.showDistances = state.showDistances ?? false
+      this.bootstrapThreshold = state.bootstrapThreshold ?? 0.8
     }
     void this.nextId
     this.emit()

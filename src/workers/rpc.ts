@@ -9,10 +9,13 @@ import {
   conservationTransferables,
   computeClustering,
   computeTree,
+  computeMotif,
   type ConservationRequest,
   type ConservationResult,
   type ClusterRequest,
   type TreeRequest,
+  type MotifRequest,
+  type MotifResult,
 } from './compute'
 import type { ClusterRunResult } from '../analysis/cluster/run'
 import type { PhyloTree } from '../tree/types'
@@ -101,6 +104,25 @@ export class NumericsClient {
         this.pending.delete(id)
         try {
           resolve(computeTree(req))
+        } catch {
+          reject(e)
+        }
+      }
+    })
+  }
+
+  motif(req: MotifRequest, transfer: Transferable[] = [req.flat.buffer]): Promise<MotifResult> {
+    if (!this.worker) return Promise.resolve(computeMotif(req))
+    const id = ++this.seq
+    const message: WorkerRequest = { id, kind: 'motif', req }
+    return new Promise<MotifResult>((resolve, reject) => {
+      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject })
+      try {
+        this.worker!.postMessage(message, transfer)
+      } catch (e) {
+        this.pending.delete(id)
+        try {
+          resolve(computeMotif(req))
         } catch {
           reject(e)
         }

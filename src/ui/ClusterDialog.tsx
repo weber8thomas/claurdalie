@@ -1,7 +1,7 @@
 import { useState, useSyncExternalStore } from 'react'
-import { ActionIcon, Button, Checkbox, Group, Radio, Select, Text, TextInput } from '@mantine/core'
-import { IconX } from '@tabler/icons-react'
+import { Button, Checkbox, Group, Radio, Select, Text, TextInput } from '@mantine/core'
 import type { EditorController } from '../editor/EditorController'
+import { FloatingPanel } from './panel/FloatingPanel'
 import type { GroupModel } from '../analysis/cluster/GroupModel'
 import { CRITERIA, CLUSTER_METHODS, type ClusterCriterionId, type ClusterMethodId } from '../analysis/cluster/types'
 import type { GapHandling } from '../analysis/cluster/distance'
@@ -63,14 +63,17 @@ export function ClusterDialog({ ctrl, group, onClose, onToast }: Props) {
   const infos = group.clusterInfos()
 
   return (
-    <div className="cluster-dialog">
-      <div className="panel-head">
-        <span className="panel-title">Clustering</span>
-        <ActionIcon variant="subtle" color="gray" onClick={onClose} aria-label="Close">
-          <IconX size={16} />
-        </ActionIcon>
-      </div>
-
+    <FloatingPanel
+      panelKey="cluster"
+      title="Clustering"
+      onClose={onClose}
+      defaultPos="top-right"
+      defaultSize={{ w: 300, h: 380 }}
+      minSize={{ w: 260, h: 240 }}
+      maxSize={{ w: 460, h: 640 }}
+      resize="both"
+    >
+      <div className="cluster-body">
       <div className="cluster-section">
         <div className="cluster-label">Criteria</div>
         <Group gap="xs">
@@ -139,6 +142,7 @@ export function ClusterDialog({ ctrl, group, onClose, onToast }: Props) {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </FloatingPanel>
   )
 }
