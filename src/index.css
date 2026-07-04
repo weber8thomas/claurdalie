@@ -1136,12 +1136,36 @@ kbd {
   font-size: 10px;
 }
 
-/* ---- Mantine chrome: menu bar + active toggles (Phase C) ---- */
+/* ---- Mantine chrome: menu bar + active toggles (Phase C / F) ---- */
 .toolbar {
   flex-wrap: nowrap;
+  gap: var(--sp-2);
+  padding: 7px var(--sp-3);
+}
+/* The whole top bar reads in one distinctive geometric face (Product-Sans-style
+   Outfit); the body stays in Inter. */
+.brand {
+  font-family: var(--font-nav);
+  font-weight: 600;
 }
 .menubar {
   gap: 2px;
+  /* Slim dividers frame the menu group from the brand and the right controls. */
+  margin-left: 2px;
+  padding: 0 var(--sp-2) 0 var(--sp-3);
+  border-left: 1px solid var(--border);
+}
+/* Menu triggers as calm pills with the nav font. */
+.menu-trigger {
+  font-family: var(--font-nav);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.menu-trigger .mantine-Button-label {
+  gap: 6px;
+}
+.menu-trigger:hover {
+  background: var(--hover);
 }
 /* Active panel/scheme toggles read as "on" with a teal tint + check. */
 .mantine-Menu-item[data-active] {
@@ -1150,6 +1174,24 @@ kbd {
 }
 .mantine-Menu-item[data-active] .mantine-Menu-itemSection {
   color: var(--accent);
+}
+
+/* Session selector: a labelled field so "Session" + the picker read as a unit. */
+.session-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  padding-left: var(--sp-3);
+  border-left: 1px solid var(--border);
+}
+.session-label {
+  font-family: var(--font-nav);
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
 }
 
 /* Shared panel header (Phase D): consistent title + trailing close action. */

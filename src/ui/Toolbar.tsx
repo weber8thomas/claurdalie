@@ -16,12 +16,15 @@ import {
   IconFileExport,
   IconFileImport,
   IconFlask,
+  IconFolder,
   IconHelp,
+  IconHelpCircle,
   IconInfoCircle,
   IconMap,
   IconMapPin,
   IconMaximize,
   IconMessage,
+  IconMicroscope,
   IconMinus,
   IconMoon,
   IconPalette,
@@ -83,10 +86,17 @@ function CheckItem({
   )
 }
 
-/** The menu-bar trigger: a subtle button with a chevron. */
-function MenuButton({ label }: { label: string }) {
+/** The menu-bar trigger: a subtle pill with a section icon, label and chevron. */
+function MenuButton({ label, icon }: { label: string; icon: React.ReactNode }) {
   return (
-    <Button variant="subtle" color="gray" size="xs" rightSection={<IconChevronDown size={13} />}>
+    <Button
+      className="menu-trigger"
+      variant="subtle"
+      color="gray"
+      size="xs"
+      leftSection={icon}
+      rightSection={<IconChevronDown size={13} />}
+    >
       {label}
     </Button>
   )
@@ -208,7 +218,7 @@ export function Toolbar({ ctrl, project, onToast, onToggleHelp, onAbout }: Props
         <Menu>
           <Menu.Target>
             <div>
-              <MenuButton label="File" />
+              <MenuButton label="File" icon={<IconFolder size={ICON} />} />
             </div>
           </Menu.Target>
           <Menu.Dropdown>
@@ -280,7 +290,7 @@ export function Toolbar({ ctrl, project, onToast, onToggleHelp, onAbout }: Props
         <Menu>
           <Menu.Target>
             <div>
-              <MenuButton label="Edit" />
+              <MenuButton label="Edit" icon={<IconPencil size={ICON} />} />
             </div>
           </Menu.Target>
           <Menu.Dropdown>
@@ -342,7 +352,7 @@ export function Toolbar({ ctrl, project, onToast, onToggleHelp, onAbout }: Props
         <Menu closeOnItemClick={false}>
           <Menu.Target>
             <div>
-              <MenuButton label="View" />
+              <MenuButton label="View" icon={<IconEye size={ICON} />} />
             </div>
           </Menu.Target>
           <Menu.Dropdown>
@@ -374,7 +384,7 @@ export function Toolbar({ ctrl, project, onToast, onToggleHelp, onAbout }: Props
         <Menu closeOnItemClick={false}>
           <Menu.Target>
             <div>
-              <MenuButton label="Analysis" />
+              <MenuButton label="Analysis" icon={<IconMicroscope size={ICON} />} />
             </div>
           </Menu.Target>
           <Menu.Dropdown>
@@ -394,7 +404,7 @@ export function Toolbar({ ctrl, project, onToast, onToggleHelp, onAbout }: Props
         <Menu closeOnItemClick={false}>
           <Menu.Target>
             <div>
-              <MenuButton label="Structure" />
+              <MenuButton label="Structure" icon={<IconCube size={ICON} />} />
             </div>
           </Menu.Target>
           <Menu.Dropdown>
@@ -406,7 +416,7 @@ export function Toolbar({ ctrl, project, onToast, onToggleHelp, onAbout }: Props
         <Menu>
           <Menu.Target>
             <div>
-              <MenuButton label="Help" />
+              <MenuButton label="Help" icon={<IconHelpCircle size={ICON} />} />
             </div>
           </Menu.Target>
           <Menu.Dropdown>
@@ -468,19 +478,23 @@ export function Toolbar({ ctrl, project, onToast, onToggleHelp, onAbout }: Props
         </ActionIcon.Group>
 
         {project && instances.length > 0 && (
-          <Tooltip label="Switch analytical instance (state is preserved)">
-            <Select
-              className="instance-select"
-              size="xs"
-              w={190}
-              leftSection={<IconEye size={14} />}
-              data={instances.map((i) => ({ value: String(i.id), label: `${i.name} · ${i.sequences}×${i.columns}` }))}
-              value={activeInstance ? String(activeInstance.id) : null}
-              onChange={(v) => v && project.switchTo(Number(v))}
-              allowDeselect={false}
-              comboboxProps={{ width: 260, position: 'bottom-end' }}
-            />
-          </Tooltip>
+          <div className="session-field">
+            <Text className="session-label" component="span">
+              Session
+            </Text>
+            <Tooltip label="Switch session (analytical instance — state is preserved)">
+              <Select
+                className="instance-select"
+                size="xs"
+                w={188}
+                data={instances.map((i) => ({ value: String(i.id), label: `${i.name} · ${i.sequences}×${i.columns}` }))}
+                value={activeInstance ? String(activeInstance.id) : null}
+                onChange={(v) => v && project.switchTo(Number(v))}
+                allowDeselect={false}
+                comboboxProps={{ width: 260, position: 'bottom-end' }}
+              />
+            </Tooltip>
+          </div>
         )}
       </Group>
 
