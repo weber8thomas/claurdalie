@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { ActionIcon, Button, Checkbox, Select } from '@mantine/core'
-import { IconX } from '@tabler/icons-react'
+import { ActionIcon, Button, Checkbox, Select, TextInput } from '@mantine/core'
+import { IconSearch, IconX } from '@tabler/icons-react'
 import type { EditorController } from '../editor/EditorController'
 import type { TreeModel, TreeColorBy } from '../tree/TreeModel'
 import type { GroupModel } from '../analysis/cluster/GroupModel'
@@ -370,30 +370,36 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
         />
       </div>
       <div className="tree-controls tree-controls-2">
-        <input
-          className="tree-search"
+        <TextInput
+          size="xs"
           type="search"
+          w={160}
           placeholder="Search tips…"
+          leftSection={<IconSearch size={14} />}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => setQuery(e.currentTarget.value)}
           disabled={!hasTree}
         />
-        <button className="btn" onClick={() => model.ladderize()} disabled={!hasTree} title="Sort clades by subtree size">
+        <Button size="compact-xs" variant="default" onClick={() => model.ladderize()} disabled={!hasTree} title="Sort clades by subtree size">
           Ladderize
-        </button>
-        <label className="cluster-check" title="Scale branches by evolutionary distance (phylogram) vs equal steps (cladogram)">
-          <input type="checkbox" checked={model.branchLengths} onChange={(e) => model.setBranchLengths(e.target.checked)} /> Branch lengths
-        </label>
+        </Button>
+        <Checkbox
+          size="xs"
+          label="Branch lengths"
+          title="Scale branches by evolutionary distance (phylogram) vs equal steps (cladogram)"
+          checked={model.branchLengths}
+          onChange={(e) => model.setBranchLengths(e.currentTarget.checked)}
+        />
         <div className="tree-spacer" />
-        <button className="btn" onClick={() => void copyNewick()} disabled={!hasTree} title="Copy Newick to clipboard">
+        <Button size="compact-xs" variant="default" onClick={() => void copyNewick()} disabled={!hasTree} title="Copy Newick to clipboard">
           Copy Newick
-        </button>
-        <button className="btn" onClick={saveNewick} disabled={!hasTree} title="Download Newick (.nwk)">
+        </Button>
+        <Button size="compact-xs" variant="default" onClick={saveNewick} disabled={!hasTree} title="Download Newick (.nwk)">
           .nwk
-        </button>
-        <button className="btn" onClick={savePNG} disabled={!hasTree} title="Save tree image (.png)">
+        </Button>
+        <Button size="compact-xs" variant="default" onClick={savePNG} disabled={!hasTree} title="Save tree image (.png)">
           PNG
-        </button>
+        </Button>
       </div>
       <div className="tree-canvas-wrap" ref={wrapRef}>
         <canvas
