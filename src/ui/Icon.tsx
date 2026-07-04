@@ -39,6 +39,8 @@ const PATHS: Record<string, string[]> = {
   barcode: ['M4 5v14', 'M7 5v14', 'M10 5v14', 'M13 5v14', 'M16 5v14', 'M19 5v14'],
   eye: ['M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'],
   'eye-off': ['M17.9 17.9A10.6 10.6 0 0 1 12 19c-7 0-11-7-11-7a19 19 0 0 1 5.1-5.9', 'M9.9 4.2A10.9 10.9 0 0 1 12 4c7 0 11 7 11 7a19 19 0 0 1-2.2 3.2', 'M1 1l22 22', 'M9.5 9.5a3 3 0 0 0 4.2 4.2'],
+  // Variant/mutation: a location pin marking a single position on a strand.
+  variant: ['M12 21s6-5.5 6-11a6 6 0 0 0-12 0c0 5.5 6 11 6 11z', 'M12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4'],
 }
 
 export function Icon({ name, size = 16 }: { name: keyof typeof PATHS | string; size?: number }) {

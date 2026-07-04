@@ -1379,3 +1379,140 @@ kbd {
 .sp-model.hidden {
   opacity: 0.5;
 }
+
+/* ---- v0.9: variant / mutation-effect panel ----------------------------- */
+.variant-panel {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  width: 440px;
+  max-width: calc(100vw - 2 * var(--sp-3));
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 10px 12px;
+  z-index: 40;
+  font-size: 12px;
+}
+.variant-add {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.variant-add .vp-seq {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+.variant-add .vp-pos {
+  width: 62px;
+}
+.variant-add .vp-to {
+  width: 76px;
+}
+.variant-add .vp-label {
+  flex: 1 1 90px;
+  min-width: 0;
+}
+.variant-add .vp-from {
+  font-family: var(--mono);
+  font-weight: 600;
+  min-width: 12px;
+  text-align: center;
+}
+.variant-add .vp-arrow {
+  color: var(--muted);
+}
+.variant-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.variant-actions .align-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+}
+.variant-results {
+  max-height: 300px;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+}
+.vp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.vp-table th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 600;
+  padding: 6px 6px 4px;
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+}
+.vp-table td {
+  padding: 4px 6px;
+  border-top: 1px solid var(--border);
+  vertical-align: top;
+}
+.vp-table tbody tr {
+  cursor: pointer;
+}
+.vp-table tbody tr:hover {
+  background: var(--hover);
+}
+.vp-table tr.vp-missing {
+  opacity: 0.5;
+}
+.vp-name b {
+  font-family: var(--mono);
+}
+.vp-impact {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+}
+.vp-chip {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.vp-band {
+  color: var(--muted);
+  font-size: 10px;
+}
+.vp-note {
+  color: var(--muted);
+  font-size: 10px;
+  max-width: 160px;
+}
+.vp-del {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+}
+.vp-del:hover {
+  color: #ef5d6c;
+}
+.aa-tt-variant {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 11px;
+}

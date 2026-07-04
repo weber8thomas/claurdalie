@@ -35,6 +35,7 @@ interface Props {
   showIdentity: boolean
   showMotif: boolean
   showBarcode: boolean
+  showVariant: boolean
   tooltipEnabled: boolean
   onToggleLegend: () => void
   onToggleMinimap: () => void
@@ -46,6 +47,7 @@ interface Props {
   onToggleIdentity: () => void
   onToggleMotif: () => void
   onToggleBarcode: () => void
+  onToggleVariant: () => void
   onToggleTooltip: () => void
 }
 
@@ -72,6 +74,7 @@ export function Toolbar({
   showIdentity,
   showMotif,
   showBarcode,
+  showVariant,
   tooltipEnabled,
   onToggleLegend,
   onToggleMinimap,
@@ -83,6 +86,7 @@ export function Toolbar({
   onToggleIdentity,
   onToggleMotif,
   onToggleBarcode,
+  onToggleVariant,
   onToggleTooltip,
 }: Props) {
   const snap = useEditorSnapshot(ctrl)
@@ -252,6 +256,13 @@ export function Toolbar({
           title="Motif search (GCG FindPatterns)"
         >
           <Icon name="search" />
+        </button>
+        <button
+          className={'icon' + (showVariant ? ' active' : '')}
+          onClick={onToggleVariant}
+          title="Variant / mutation-effect analysis"
+        >
+          <Icon name="variant" />
         </button>
         <button className={'icon' + (showAlign ? ' active' : '')} onClick={onToggleAlign} title="Re-align sequences">
           <Icon name="align" />

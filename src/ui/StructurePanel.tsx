@@ -84,13 +84,14 @@ export function StructurePanel({ ctrl, structure, hover, width, height, onResize
     if (viewerReady) viewerRef.current?.setRepresentation(st.representation)
   }, [viewerReady, st.representation])
 
-  // Drive the 3D highlight from alignment hover (any folded sequence).
+  // Drive the 3D highlight: an externally-requested focus (e.g. a variant the
+  // user clicked in the Variant panel) wins over transient alignment hover.
   useEffect(() => {
     const v = viewerRef.current
     if (!v || !viewerReady) return
-    const t = hover ? structure.hoverTarget(hover.row, hover.col) : null
+    const t = st.focus ?? (hover ? structure.hoverTarget(hover.row, hover.col) : null)
     v.highlightResidue(t?.modelId ?? null, t?.index ?? null)
-  }, [hover, viewerReady, st.modelsRev, structure])
+  }, [hover, st.focus, viewerReady, st.modelsRev, structure])
 
   // Resize the GL canvas when the panel box or fullscreen state changes.
   useEffect(() => {

@@ -74,6 +74,11 @@ export class GridRenderer {
   groupColorOf: ((visualRow: number) => string | null) | null = null
   /** Optional motif match overlay (Ordalie high-contrast mode). Set by MotifModel. */
   matchOverlay: { rangesOf: (visualRow: number) => Array<[number, number]>; active: boolean } | null = null
+  /** Optional variant marker pins (impact-colored), drawn over cells. Set by VariantModel. */
+  variantMarkers: {
+    markersOf: (visualRow: number) => Array<{ col: number; color: string; score: number }>
+    active: boolean
+  } | null = null
   selection: Selection | null = null
   cursor: CellPos | null = null
   hover: CellPos | null = null
@@ -255,6 +260,7 @@ export class GridRenderer {
     this.paintCells(vis)
     this.paintMatchOverlay(vis)
     this.paintSelectionAndCursor()
+    this.paintVariantMarkers(vis)
     this.paintGutter(vis)
     this.paintRuler(vis)
     this.paintCorner()
@@ -555,6 +561,46 @@ export class GridRenderer {
         if (b <= a) continue
         const x = this.cellX(a)
         ctx.fillRect(x, y, this.cellX(b) - x, h)
+      }
+    }
+    ctx.restore()
+  }
+
+  /**
+   * Variant pins: a small impact-colored diamond in the top-left of each cell
+   * that carries a variant, with a thin dark outline so it reads over any
+   * residue color. Drawn above cells + selection but below the gutter, and kept
+   * visible (min size) in block mode.
+   */
+  private paintVariantMarkers(vis: ReturnType<typeof computeVisible>): void {
+    const o = this.variantMarkers
+    if (!o || !o.active) return
+    const ctx = this.ctx
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(GUTTER_W, RULER_H, this.gridWidthPx, this.gridHeightPx)
+    ctx.clip()
+    const r = Math.max(2.5, Math.min(this.cellW, this.cellH) * 0.32)
+    ctx.lineWidth = 1
+    for (let v = vis.firstRow; v < vis.lastRow; v++) {
+      const markers = o.markersOf(v)
+      if (!markers.length) continue
+      const y = this.cellY(v)
+      for (const m of markers) {
+        if (m.col < vis.firstCol || m.col > vis.lastCol) continue
+        const cx = this.cellX(m.col) + r + 1
+        const cy = y + r + 1
+        // Diamond pin.
+        ctx.beginPath()
+        ctx.moveTo(cx, cy - r)
+        ctx.lineTo(cx + r, cy)
+        ctx.lineTo(cx, cy + r)
+        ctx.lineTo(cx - r, cy)
+        ctx.closePath()
+        ctx.fillStyle = m.color
+        ctx.fill()
+        ctx.strokeStyle = this.theme.dark ? 'rgba(0,0,0,0.75)' : 'rgba(20,22,28,0.85)'
+        ctx.stroke()
       }
     }
     ctx.restore()

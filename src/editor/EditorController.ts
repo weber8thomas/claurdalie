@@ -321,6 +321,9 @@ export class EditorController {
     savePrefs({ schemeId: id })
     this.bump()
   }
+  isDark(): boolean {
+    return this.dark
+  }
   setDark(dark: boolean): void {
     this.dark = dark
     this.schemes = buildSchemes(dark)
@@ -687,6 +690,12 @@ export class EditorController {
   /** Motif match overlay for the grid (set by MotifModel; null clears it). */
   setMatchOverlay(o: GridRenderer['matchOverlay']): void {
     this.renderer.matchOverlay = o
+    this.renderer.markDirty()
+  }
+
+  /** Variant marker pins for the grid (set by VariantModel; null clears them). */
+  setVariantMarkers(o: GridRenderer['variantMarkers']): void {
+    this.renderer.variantMarkers = o
     this.renderer.markDirty()
   }
 

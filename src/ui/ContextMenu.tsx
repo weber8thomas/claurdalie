@@ -20,11 +20,14 @@ export function ContextMenu({
   menu,
   onClose,
   onToast,
+  onAddVariant,
 }: {
   ctrl: EditorController
   menu: MenuState
   onClose: () => void
   onToast: (msg: string) => void
+  /** Propose a variant at the clicked residue (opens the Variant panel). */
+  onAddVariant?: (hit: Hit) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const { hit } = menu
@@ -61,6 +64,9 @@ export function ContextMenu({
       { label: 'Enable Edit mode (F2) to modify', onClick: run(() => ctrl.toggleCursorMode()) },
       'sep',
     )
+  }
+  if (inGrid && onAddVariant && ctrl.describeCell(hit.row, hit.col).ungapped != null) {
+    items.push({ label: 'Add variant here', onClick: run(() => onAddVariant(hit)) }, 'sep')
   }
   if (inGrid) {
     const scope = targetIsSelection ? 'selection' : 'cell'

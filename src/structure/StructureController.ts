@@ -63,6 +63,8 @@ export interface StructureState {
   colorMode: ColorMode
   representation: Representation
   sourceLabel: string
+  /** An externally-requested residue highlight (e.g. a variant), preferred over hover. */
+  focus: { modelId: string; index: number } | null
 }
 
 export class StructureController {
@@ -82,6 +84,7 @@ export class StructureController {
     colorMode: 'plddt',
     representation: 'cartoon',
     sourceLabel: this.source.label,
+    focus: null,
   }
 
   private listeners = new Set<() => void>()
@@ -281,6 +284,18 @@ export class StructureController {
       }
     }
     return null
+  }
+
+  /**
+   * Externally request a residue highlight from an alignment (visualRow, col) —
+   * used by the variant panel to spotlight a variant's residue in 3D. Pass an
+   * out-of-range cell (e.g. -1, -1) to clear. Resolves the same way as hover.
+   */
+  focusColumn(visualRow: number, col: number): void {
+    const t = visualRow < 0 || col < 0 ? null : this.hoverTarget(visualRow, col)
+    const cur = this.state.focus
+    if (cur?.modelId === t?.modelId && cur?.index === t?.index) return
+    this.emit({ focus: t })
   }
 
   /** A 3D residue pick jumps the alignment cursor to the matching column. */

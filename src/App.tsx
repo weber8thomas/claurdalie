@@ -20,7 +20,9 @@ import { AlignPanel } from './ui/AlignPanel'
 import { IdentityDialog } from './ui/IdentityDialog'
 import { MotifSearch } from './ui/MotifSearch'
 import { BarcodePanel } from './ui/BarcodePanel'
+import { VariantPanel } from './ui/VariantPanel'
 import { MotifModel } from './analysis/motif/MotifModel'
+import { VariantModel } from './analysis/variant/VariantModel'
 import { AlignController } from './align/AlignController'
 import { ProjectStore, type ProjectHost } from './project/ProjectStore'
 import { loadProject, saveProject } from './project/idb'
@@ -49,6 +51,8 @@ export default function App() {
   const [showIdentity, setShowIdentity] = useState(false)
   const [showMotif, setShowMotif] = useState(false)
   const [showBarcode, setShowBarcode] = useState(() => loadPrefs().showBarcode ?? false)
+  const [showVariant, setShowVariant] = useState(false)
+  const [variantPrefill, setVariantPrefill] = useState<{ seqName: string; position: number } | null>(null)
   const [scoresH, setScoresH] = useState(() => loadPrefs().scoresH ?? 104)
   const [structure, setStructure] = useState<StructureController | null>(null)
   const [project, setProject] = useState<ProjectStore | null>(null)
@@ -56,6 +60,7 @@ export default function App() {
   const [groups, setGroups] = useState<GroupModel | null>(null)
   const [tree, setTree] = useState<TreeModel | null>(null)
   const [motif, setMotif] = useState<MotifModel | null>(null)
+  const [variant, setVariant] = useState<VariantModel | null>(null)
   const [align, setAlign] = useState<AlignController | null>(null)
   const [minimapSize, setMinimapSize] = useState(() => {
     const p = loadPrefs()
@@ -103,6 +108,12 @@ export default function App() {
     }
   }, [ctrl])
 
+  // Late-bind the structure controller into the variant model so a variant can
+  // spotlight its residue in 3D (both are created in separate [ctrl] effects).
+  useEffect(() => {
+    variant?.setStructure(structure)
+  }, [variant, structure])
+
   // The Snapshot spine + conservation model. Every analytical module registers
   // as a snapshot slice so switching instances restores exact state; a "view"
   // slice carries the scheme/scroll/cursor so the display is restored too.
@@ -112,6 +123,9 @@ export default function App() {
     const groupModel = new GroupModel(ctrl)
     const treeModel = new TreeModel(ctrl)
     const motifModel = new MotifModel(ctrl)
+    // Variants score against conservation tracks + column stats; the structure
+    // controller is late-bound (created in a sibling effect) for the 3D highlight.
+    const variantModel = new VariantModel(ctrl, model, ctrl.stats)
     // Per-group conservation tracks: feed group subsets to the conservation model
     // and recompute shown tracks whenever the grouping changes.
     model.setGroupProvider(() => groupModel.groups().map((g) => ({ id: g.clusterId, rows: g.rows })))
@@ -133,6 +147,8 @@ export default function App() {
     // conservation recomputes on a snapshot switch.
     proj.register(groupModel)
     proj.register(model)
+    // Variants hydrate AFTER conservation so tracks are available when they rescore.
+    proj.register(variantModel)
     proj.register(treeModel)
     proj.register(motifModel)
     proj.register(viewSlice)
@@ -183,6 +199,7 @@ export default function App() {
     setGroups(groupModel)
     setTree(treeModel)
     setMotif(motifModel)
+    setVariant(variantModel)
     setProject(proj)
     setAlign(alignCtrl)
     return () => {
@@ -194,11 +211,13 @@ export default function App() {
       groupModel.destroy()
       treeModel.destroy()
       motifModel.destroy()
+      variantModel.destroy()
       alignCtrl.destroy()
       setConservation(null)
       setGroups(null)
       setTree(null)
       setMotif(null)
+      setVariant(null)
       setProject(null)
       setAlign(null)
     }
@@ -206,6 +225,16 @@ export default function App() {
 
   const toggleHelp = useCallback(() => setHelp((h) => !h), [])
   const openContextMenu = useCallback((x: number, y: number, hit: Hit) => setMenu({ x, y, hit }), [])
+  const proposeVariant = useCallback(
+    (hit: Hit) => {
+      if (!ctrl) return
+      const info = ctrl.describeCell(hit.row, hit.col)
+      if (info.ungapped == null) return
+      setVariantPrefill({ seqName: ctrl.store.rowName(hit.row), position: info.ungapped })
+      setShowVariant(true)
+    },
+    [ctrl],
+  )
 
   const onDrop = async (e: React.DragEvent) => {
     e.preventDefault()
@@ -245,6 +274,7 @@ export default function App() {
           showIdentity={showIdentity}
           showMotif={showMotif}
           showBarcode={showBarcode}
+          showVariant={showVariant}
           tooltipEnabled={tooltipEnabled}
           onToggleLegend={() => setShowLegend((s) => !s)}
           onToggleMinimap={() => setShowMinimap((s) => !s)}
@@ -256,6 +286,7 @@ export default function App() {
           onToggleIdentity={() => setShowIdentity((s) => !s)}
           onToggleMotif={() => setShowMotif((s) => !s)}
           onToggleBarcode={() => setShowBarcode((s) => !s)}
+          onToggleVariant={() => setShowVariant((s) => !s)}
           onToggleTooltip={() => setTooltipEnabled((s) => !s)}
         />
       )}
@@ -306,6 +337,17 @@ export default function App() {
             onToast={showToast}
           />
         )}
+        {ctrl && variant && showVariant && (
+          <VariantPanel
+            ctrl={ctrl}
+            structure={structure}
+            model={variant}
+            prefill={variantPrefill}
+            onConsumePrefill={() => setVariantPrefill(null)}
+            onClose={() => setShowVariant(false)}
+            onToast={showToast}
+          />
+        )}
         {dragging && <div className="dropzone">Drop a FASTA file to load</div>}
       </div>
       {ctrl && groups && showBarcode && (
@@ -326,9 +368,15 @@ export default function App() {
       {help && <HelpOverlay onClose={() => setHelp(false)} />}
       {about && <AboutDialog onClose={() => setAbout(false)} />}
       {ctrl && menu && (
-        <ContextMenu ctrl={ctrl} menu={menu} onClose={() => setMenu(null)} onToast={showToast} />
+        <ContextMenu
+          ctrl={ctrl}
+          menu={menu}
+          onClose={() => setMenu(null)}
+          onToast={showToast}
+          onAddVariant={proposeVariant}
+        />
       )}
-      {ctrl && hover && tooltipEnabled && !menu && <AATooltip ctrl={ctrl} hover={hover} />}
+      {ctrl && hover && tooltipEnabled && !menu && <AATooltip ctrl={ctrl} hover={hover} variant={variant} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   )

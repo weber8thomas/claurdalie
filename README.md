@@ -44,6 +44,16 @@ snapshot-driven exploration of an alignment's informational content, in the brow
   the grid with **Find Next / Prev** that scrolls the view
 - **Barcode** — one lane per cluster showing a column-aligned "barcode" of per-group
   conservation, gap density, and any active motif feature
+- **Variant / mutation-effect analysis** — add point substitutions to a sequence (manually,
+  by CSV/TSV import `seq,pos,from,to,label`, or right-click a residue → *Add variant here*),
+  then score their predicted impact behind a pluggable **`VariantEffectSource`**: a pure,
+  offline **local scorer** combining the BLOSUM62 substitution penalty with the conservation
+  of the mapped column (highly-conserved + non-conservative ⇒ high impact), plus an optional
+  online **PLM-endpoint** scorer that degrades gracefully when unreachable. Impact-colored pins
+  render on the alignment (green→amber→red), a results table shows the score and *what drove it*
+  (which column / conservation), a hover tooltip reads `from→to · impact`, and the variant's
+  residue highlights in the **3D viewer**. Variants ride the snapshot (serialized by sequence
+  name + ungapped position) so they survive instance switches and `.clproj` export
 - **Clustering & groups** — group sequences by identity / length / hydrophobicity / pI /
   composition using **hierarchic (Secator)**, **k-means**, **density-peaks (DPC)**, or
   **Gaussian mixture + AIC/BIC** (auto-selecting the number of groups); groups reorder the
@@ -118,8 +128,9 @@ project/     Snapshot spine: SerializableModule contract, ProjectStore (instant 
              .clproj (de)serialization (gzip via CompressionStream, gap-RLE) + IndexedDB
 align/       pluggable Aligner (mirrors StructureSource): Kalign-WASM via Aioli (dynamic CDN
              import) + optional EBI MAFFT; degap→regap apply as one undoable edit; controller
-variant/     mutation-effect SEAM only — Variant + VariantEffectSource + VariantContext types
-             and an (empty) registry; no scorer yet
+variant/     mutation-effect analysis — Variant + VariantEffectSource + VariantContext types,
+             a pure local BLOSUM×conservation scorer + optional online PLM stub, CSV/TSV I/O,
+             and a VariantModel (snapshot slice) driving the alignment pins + 3D highlight
 ```
 
 Design rule #1: **React owns the chrome, never a residue.** The alignment surface is one
@@ -134,7 +145,8 @@ Static build deployed to **GitHub Pages** via `.github/workflows/deploy.yml`
 
 Reimplementing Ordalie's analysis layer, client-side and lightweight. Shipped: conservation +
 the snapshot/instance spine (v0.4), clustering & groups (v0.5), the phylogenetic tree (v0.6),
-**persistence + re-align (v0.7)**, and **lighter tools (v0.8)**. Next, in dependency order:
+**persistence + re-align (v0.7)**, **lighter tools (v0.8)**, and **variant / mutation-effect
+analysis (v0.9)**. Next, in dependency order:
 
 - **v0.7 — Persistence + re-align** ✅ *shipped*: `.clproj` project export/import (IndexedDB
   working state); in-browser re-alignment via Kalign (biowasm/Aioli) behind a pluggable
@@ -145,6 +157,13 @@ the snapshot/instance spine (v0.4), clustering & groups (v0.5), the phylogenetic
   a matcher with a high-contrast grid overlay + Find Next), the **Snapshot Overview**
   (residue/conservation/cluster overlays + zoom on the minimap), and the per-cluster
   **Barcode**; plus per-model 3D show/hide and a resizable conservation panel
+- **v0.9 — Variant / mutation-effect analysis** ✅ *shipped*: point substitutions added
+  manually / by CSV-TSV import / by right-clicking a residue, scored behind a pluggable
+  **`VariantEffectSource`** — a pure offline **BLOSUM62 × conservation** local scorer and an
+  optional online **PLM-endpoint** stub with the same typed-error / offline-degrade UX as the
+  structure sources; impact-colored alignment pins + hover tooltip, a results table explaining
+  each score, a **3D residue highlight**, and a **VariantModel** snapshot slice (serialized by
+  sequence name + ungapped position)
 
 Deferred infra: WebGL/PixiJS renderer + MSDF atlas (behind the existing `Renderer` interface)
 and Rust→WASM numeric kernels, adopted where profiling on very large alignments shows a ceiling.
