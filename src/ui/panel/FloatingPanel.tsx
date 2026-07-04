@@ -367,7 +367,10 @@ export function FloatingPanel({
         </ActionIcon>
       </div>
 
-      {!collapsed && <div className="fp-body">{children}</div>}
+      {/* The body is HIDDEN (not unmounted) when collapsed, so canvas panels
+          (tree/3D) keep their drawing state — unmounting here remounts a blank
+          canvas that never redraws. */}
+      <div className="fp-body">{children}</div>
 
       {!fullscreen &&
         !collapsed &&

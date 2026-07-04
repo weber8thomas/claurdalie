@@ -1330,6 +1330,22 @@ body.fp-dragging .fp-body .sp-host {
 .dock-rail.active {
   display: flex;
 }
+/* Left-edge width-resize handle (mirrors the scores strip's height handle). */
+.dock-rail-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 8px;
+  cursor: ew-resize;
+  z-index: 1;
+}
+.dock-rail-resize:hover {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.dock-rail.collapsed .dock-rail-resize {
+  display: none;
+}
 .dock-rail.collapsed {
   width: 38px;
 }
@@ -1407,6 +1423,10 @@ body.fp-dragging .fp-body .sp-host {
 }
 .dock-rail-slot .fp.collapsed .fp-head {
   border-bottom: none;
+}
+/* Collapsed: hide the body (don't unmount) so canvas panels keep their drawing. */
+.fp.collapsed .fp-body {
+  display: none;
 }
 /* Docked header is a reorder grab handle. */
 .dock-rail-slot .fp-head {

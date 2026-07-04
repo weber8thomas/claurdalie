@@ -2,6 +2,10 @@
 
 All notable changes to Claurdalie, newest first.
 
+## v0.12.3
+- Fix docked 3D / tree panels going blank after collapse+expand (or reload while collapsed): the body is now hidden, not unmounted, so the canvas keeps its drawing
+- The Panels dock rail is now width-resizable — drag its left edge; the width persists
+
 ## v0.12.2
 - Panels rail no longer covers the bottom status bar (bounded to the alignment area)
 - Floating panels open to the left of the Panels rail instead of behind it

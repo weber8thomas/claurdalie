@@ -36,6 +36,8 @@ export interface Prefs {
   gapGlyph?: 'blank' | 'dash' | 'dot' | 'cross'
   gapFill?: string | null
   gridLines?: boolean
+  /** Expanded width of the Panels dock rail. */
+  railWidth?: number
 }
 
 export function loadPrefs(): Prefs {

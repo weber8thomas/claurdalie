@@ -63,6 +63,8 @@ interface PanelsState extends Record<PanelKey, boolean> {
   zTop: number
   /** Whether the dock rail is collapsed to a thin tab. */
   railCollapsed: boolean
+  /** Expanded width (px) of the Panels rail (user-resizable). */
+  railWidth: number
   /** Live reorder state (the dragged docked panel + its would-be drop index). */
   dockDrag: DockDrag | null
   toggle: (k: PanelKey) => void
@@ -80,6 +82,7 @@ interface PanelsState extends Record<PanelKey, boolean> {
   moveDock: (k: PanelKey, toIndex: number) => void
   setDockDrag: (d: DockDrag | null) => void
   setRailCollapsed: (v: boolean) => void
+  setRailWidth: (w: number) => void
 }
 
 const prefs = loadPrefs()
@@ -139,14 +142,16 @@ for (const [k, p] of Object.entries(prefs.panelWindows ?? {})) {
 }
 
 // Dock-rail widths (kept in step with .dock-rail / .dock-rail.collapsed in CSS).
-const RAIL_W = 360
+const RAIL_DEFAULT_W = 360
+const RAIL_MIN_W = 260
+const RAIL_MAX_W = 720
 const RAIL_COLLAPSED_W = 34
 
 /** Width reserved on the right by the Panels rail (0 when nothing is docked). */
-export function railInset(s: Pick<PanelsState, 'windows' | 'railCollapsed'>): number {
+export function railInset(s: Pick<PanelsState, 'windows' | 'railCollapsed' | 'railWidth'>): number {
   const anyDocked = Object.values(s.windows).some((w) => w?.docked)
   if (!anyDocked) return 0
-  return s.railCollapsed ? RAIL_COLLAPSED_W : RAIL_W
+  return s.railCollapsed ? RAIL_COLLAPSED_W : s.railWidth
 }
 
 /** Re-clamp every FLOATING window's x against a right inset (rail width). */
@@ -192,6 +197,7 @@ export const usePanels = create<PanelsState>((set, get) => ({
   windows: savedWindows,
   zTop: seedZ,
   railCollapsed: false,
+  railWidth: Math.max(RAIL_MIN_W, Math.min(RAIL_MAX_W, prefs.railWidth ?? RAIL_DEFAULT_W)),
   dockDrag: null,
   toggle: (k) => {
     set((s) => ({ [k]: !s[k] }) as Pick<PanelsState, PanelKey>)
@@ -261,7 +267,7 @@ export const usePanels = create<PanelsState>((set, get) => ({
     }
     // The rail may have just appeared/disappeared — slide floating panels out from
     // behind it (or let them reclaim the space when the last panel undocks).
-    const inset = railInset({ windows: next, railCollapsed: get().railCollapsed })
+    const inset = railInset({ windows: next, railCollapsed: get().railCollapsed, railWidth: get().railWidth })
     set({ windows: reclampFloating(next, inset) })
     persistWindows(get())
   },
@@ -295,10 +301,17 @@ export const usePanels = create<PanelsState>((set, get) => ({
     persistWindows(get())
   },
   setDockDrag: (d) => set({ dockDrag: d }),
+  setRailWidth: (w) => {
+    const railWidth = Math.round(Math.max(RAIL_MIN_W, Math.min(RAIL_MAX_W, w)))
+    // Widening the rail pushes floating panels left so none hide behind it.
+    const inset = railInset({ windows: get().windows, railCollapsed: get().railCollapsed, railWidth })
+    set({ railWidth, windows: reclampFloating(get().windows, inset) })
+    savePrefs({ railWidth })
+  },
   setRailCollapsed: (v) => {
     // Expanding the rail widens the reserved area — push floating panels left so
     // none end up hidden behind it.
-    const inset = railInset({ windows: get().windows, railCollapsed: v })
+    const inset = railInset({ windows: get().windows, railCollapsed: v, railWidth: get().railWidth })
     set({ railCollapsed: v, windows: reclampFloating(get().windows, inset) })
     persistWindows(get())
   },
