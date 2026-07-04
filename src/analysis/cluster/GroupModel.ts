@@ -11,10 +11,11 @@ import { NumericsClient } from '../../workers/rpc'
 import type { SerializableModule } from '../../project/types'
 import type { GapHandling } from './distance'
 import type { ClusterCriterionId, ClusterMethodId, Cluster } from './types'
+import { CATEGORICAL, NEUTRAL_GROUP } from '../../color/palette'
 
-/** Distinct group colors (brand palette, extended); "Others" is neutral gray. */
-const GROUP_COLORS = ['#2bb3a3', '#f3a83c', '#5b7cf0', '#ef5d6c', '#8b5cf6', '#22c55e', '#eab308', '#ec4899', '#14b8a6', '#f97316']
-const OTHERS_COLOR = '#8a8a94'
+/** Distinct group colors (shared categorical palette); "Others" is neutral gray. */
+const GROUP_COLORS = CATEGORICAL
+const OTHERS_COLOR = NEUTRAL_GROUP
 
 export interface GroupSubset {
   clusterId: number

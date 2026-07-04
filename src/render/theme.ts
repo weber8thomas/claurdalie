@@ -1,4 +1,5 @@
 import type { RGB } from '../color/scheme'
+import { ACCENT_LIGHT_RGB, ACCENT_DARK_RGB } from '../color/palette'
 
 /** Colors the canvas renderer needs (chrome pixels drawn on the canvas). */
 export interface CanvasTheme {
@@ -23,10 +24,10 @@ export const LIGHT_CANVAS: CanvasTheme = {
   gridLine: 0xe6e8ec,
   text: 0x24242a,
   mutedText: 0x8a8f98,
-  cursor: 0x0d9488,
-  selection: 0x0d9488,
+  cursor: ACCENT_LIGHT_RGB,
+  selection: ACCENT_LIGHT_RGB,
   hover: 0x94a3b8,
-  dropLine: 0x0d9488,
+  dropLine: ACCENT_LIGHT_RGB,
 }
 
 export const DARK_CANVAS: CanvasTheme = {
@@ -37,8 +38,8 @@ export const DARK_CANVAS: CanvasTheme = {
   gridLine: 0x2a2c33,
   text: 0xd8d8dc,
   mutedText: 0x8a8f98,
-  cursor: 0x2dd4bf,
-  selection: 0x2dd4bf,
+  cursor: ACCENT_DARK_RGB,
+  selection: ACCENT_DARK_RGB,
   hover: 0x64748b,
-  dropLine: 0x2dd4bf,
+  dropLine: ACCENT_DARK_RGB,
 }

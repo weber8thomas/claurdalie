@@ -20,9 +20,10 @@ import { applySubstitution } from '../analysis/variant/mutate'
 import type { Structure, StructureSource, FoldErrorKind } from './types'
 import { FoldError } from './types'
 import type { ColorMode, Representation, ViewerModel } from './viewer'
+import { CATEGORICAL } from '../color/palette'
 
-/** Distinct model colors (matches the app's brand palette, extended). */
-const MODEL_COLORS = ['#2bb3a3', '#f3a83c', '#5b7cf0', '#ef5d6c', '#8b5cf6', '#22c55e', '#eab308', '#ec4899']
+/** Distinct model colors from the shared categorical palette. */
+const MODEL_COLORS = CATEGORICAL
 
 type ModelKind = 'fold' | 'file' | 'compare'
 

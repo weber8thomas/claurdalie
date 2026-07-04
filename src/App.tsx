@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { MantineProvider } from '@mantine/core'
+import { Notifications } from '@mantine/notifications'
+import { mantineTheme } from './ui/theme/mantineTheme'
 import type { EditorController } from './editor/EditorController'
 import { AlignmentCanvas } from './ui/AlignmentCanvas'
 import { Toolbar } from './ui/Toolbar'
@@ -36,6 +39,9 @@ import type { HoverPayload } from './editor/interaction'
 
 export default function App() {
   const [ctrl, setCtrl] = useState<EditorController | null>(null)
+  // The editor's `dark` flag is the single source of truth; seed from prefs for
+  // first paint, then ThemeSync keeps it (and MantineProvider) in step.
+  const [dark, setDark] = useState(() => loadPrefs().dark ?? false)
   const [help, setHelp] = useState(false)
   const [about, setAbout] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -251,17 +257,19 @@ export default function App() {
   }
 
   return (
-    <div
-      className="app"
-      onDragOver={(e) => {
-        e.preventDefault()
-        if (!dragging) setDragging(true)
-      }}
-      onDragLeave={(e) => {
-        if (e.relatedTarget === null) setDragging(false)
-      }}
-      onDrop={onDrop}
-    >
+    <MantineProvider theme={mantineTheme} forceColorScheme={dark ? 'dark' : 'light'}>
+      <Notifications position="bottom-center" limit={3} />
+      <div
+        className="app"
+        onDragOver={(e) => {
+          e.preventDefault()
+          if (!dragging) setDragging(true)
+        }}
+        onDragLeave={(e) => {
+          if (e.relatedTarget === null) setDragging(false)
+        }}
+        onDrop={onDrop}
+      >
       {ctrl && (
         <Toolbar
           ctrl={ctrl}
@@ -368,7 +376,7 @@ export default function App() {
         />
       )}
       {ctrl && <StatusBar ctrl={ctrl} onAbout={() => setAbout(true)} />}
-      {ctrl && <ThemeSync ctrl={ctrl} />}
+      {ctrl && <ThemeSync ctrl={ctrl} onDark={setDark} />}
       {help && <HelpOverlay onClose={() => setHelp(false)} />}
       {about && <AboutDialog onClose={() => setAbout(false)} />}
       {ctrl && menu && (
@@ -382,6 +390,7 @@ export default function App() {
       )}
       {ctrl && hover && tooltipEnabled && !menu && <AATooltip ctrl={ctrl} hover={hover} variant={variant} />}
       {toast && <div className="toast">{toast}</div>}
-    </div>
+      </div>
+    </MantineProvider>
   )
 }

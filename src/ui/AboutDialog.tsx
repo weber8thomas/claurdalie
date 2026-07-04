@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { APP_VERSION, REPO_URL } from '../version'
 import { Icon } from './Icon'
+import { BrandMark } from './BrandMark'
 
 export function AboutDialog({ onClose }: { onClose: () => void }) {
   useEffect(() => {
@@ -15,21 +16,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
           <Icon name="x" />
         </button>
         <div className="about-head">
-          <svg className="brand-mark" viewBox="0 0 100 100" width="40" height="40" aria-hidden="true">
-            <rect width="100" height="100" rx="22" fill="#12141c" />
-            <rect x="14" y="16" width="15" height="18" rx="3" fill="#2bb3a3" />
-            <rect x="33" y="16" width="15" height="18" rx="3" fill="#f3a83c" />
-            <rect x="52" y="16" width="15" height="18" rx="3" fill="#5b7cf0" />
-            <rect x="71" y="16" width="15" height="18" rx="3" fill="#ef5d6c" />
-            <rect x="14" y="40" width="15" height="18" rx="3" fill="#f3a83c" />
-            <rect x="33" y="40" width="15" height="18" rx="3" fill="#5b7cf0" />
-            <rect x="52" y="40" width="15" height="18" rx="3" fill="#2bb3a3" opacity="0.22" />
-            <rect x="71" y="40" width="15" height="18" rx="3" fill="#2bb3a3" />
-            <rect x="14" y="64" width="15" height="18" rx="3" fill="#5b7cf0" />
-            <rect x="33" y="64" width="15" height="18" rx="3" fill="#ef5d6c" />
-            <rect x="52" y="64" width="15" height="18" rx="3" fill="#f3a83c" />
-            <rect x="71" y="64" width="15" height="18" rx="3" fill="#2bb3a3" />
-          </svg>
+          <BrandMark size={40} />
           <div>
             <h2 style={{ margin: 0 }}>
               Claurdalie <span className="about-ver">v{APP_VERSION}</span>

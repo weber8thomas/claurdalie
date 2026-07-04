@@ -7,6 +7,8 @@
 // and a PNG snapshot. All updates are event-driven (load / restyle / highlight
 // / resize), never in lockstep with the alignment grid's render loop.
 
+import { CATEGORICAL } from '../color/palette'
+
 export interface ViewerModel {
   id: string
   pdb: string
@@ -68,7 +70,7 @@ function hslHex(h: number, s = 0.7, l = 0.5): string {
   return `#${f(0)}${f(8)}${f(4)}`
 }
 
-const CHAIN_COLORS = ['#2bb3a3', '#f3a83c', '#5b7cf0', '#ef5d6c', '#8b5cf6', '#22c55e']
+const CHAIN_COLORS = CATEGORICAL.slice(0, 6)
 
 const HIGHLIGHT = '#ff2e88'
 

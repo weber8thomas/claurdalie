@@ -320,7 +320,7 @@ canvas.grid {
   pointer-events: auto;
 }
 .sp-error {
-  color: var(--danger, #ef5d6c);
+  color: var(--danger);
 }
 .sp-sub {
   font-size: 10.5px;
@@ -375,7 +375,7 @@ canvas.grid {
   padding: 0 2px;
 }
 .sp-model-x:hover {
-  color: var(--danger, #ef5d6c);
+  color: var(--danger);
 }
 .sp-clear {
   align-self: flex-end;
@@ -784,8 +784,8 @@ kbd {
   cursor: default;
 }
 .snapshot-btn.danger:hover:not(:disabled) {
-  color: #ef5d6c;
-  border-color: #ef5d6c;
+  color: var(--danger);
+  border-color: var(--danger);
 }
 .snapshot-spacer {
   flex: 1 1 8px;
@@ -968,8 +968,8 @@ kbd {
   border-color: var(--border-strong);
 }
 .align-btn.primary {
-  border-color: #2bb3a3;
-  color: #2bb3a3;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .align-btn:disabled {
   opacity: 0.45;
@@ -993,7 +993,7 @@ kbd {
   padding: 2px 8px;
 }
 .align-error {
-  color: #ef5d6c;
+  color: var(--danger);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -1267,7 +1267,7 @@ kbd {
   padding: 0 3px;
 }
 .motif-error {
-  color: #ef5d6c;
+  color: var(--danger);
   font-size: 11px;
   margin: 4px 0;
 }
@@ -1564,7 +1564,7 @@ kbd {
   padding: 0 2px;
 }
 .vp-del:hover {
-  color: #ef5d6c;
+  color: var(--danger);
 }
 .aa-tt-variant {
   display: flex;

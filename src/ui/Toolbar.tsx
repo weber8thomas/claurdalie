@@ -2,23 +2,7 @@ import { useRef } from 'react'
 import type { EditorController } from '../editor/EditorController'
 import { useEditorSnapshot } from './useEditor'
 import { Icon } from './Icon'
-
-/** Brand mark: a tiny colored alignment tile (residues + a gap). */
-function BrandMark() {
-  const cells: [number, number, string, number?][] = [
-    [14, 16, '#2bb3a3'], [33, 16, '#f3a83c'], [52, 16, '#5b7cf0'], [71, 16, '#ef5d6c'],
-    [14, 40, '#f3a83c'], [33, 40, '#5b7cf0'], [52, 40, '#2bb3a3', 0.22], [71, 40, '#2bb3a3'],
-    [14, 64, '#5b7cf0'], [33, 64, '#ef5d6c'], [52, 64, '#f3a83c'], [71, 64, '#2bb3a3'],
-  ]
-  return (
-    <svg className="brand-mark" viewBox="0 0 100 100" width="22" height="22" aria-hidden="true">
-      <rect width="100" height="100" rx="22" fill="#12141c" />
-      {cells.map(([x, y, fill, op], i) => (
-        <rect key={i} x={x} y={y} width="15" height="18" rx="3" fill={fill} opacity={op ?? 1} />
-      ))}
-    </svg>
-  )
-}
+import { BrandMark } from './BrandMark'
 
 interface Props {
   ctrl: EditorController

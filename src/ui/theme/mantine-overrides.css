@@ -1,0 +1,36 @@
+/* Bridge Mantine's surface variables onto Claurdalie's design tokens so every
+   Mantine surface (Paper, Menu, Modal, Select dropdown, inputs) follows the
+   same [data-theme] switch as the tokens.css palette and the canvas layer.
+   Component-level styling (radius, spacing, typography, primary) lives in
+   mantineTheme.ts; this file only aligns colors. */
+
+:root {
+  --mantine-color-body: var(--panel);
+  --mantine-color-text: var(--text);
+  --mantine-color-dimmed: var(--muted);
+  --mantine-color-default: var(--panel);
+  --mantine-color-default-hover: var(--hover);
+  --mantine-color-default-border: var(--border);
+  --mantine-color-error: var(--danger);
+}
+
+/* Popovers / menus / dropdowns sit on the elevated panel surface. */
+.mantine-Menu-dropdown,
+.mantine-Popover-dropdown,
+.mantine-Select-dropdown,
+.mantine-Combobox-dropdown {
+  background: var(--panel);
+  border-color: var(--border);
+  box-shadow: var(--shadow);
+}
+
+.mantine-Modal-content,
+.mantine-Modal-header {
+  background: var(--panel);
+  color: var(--text);
+}
+
+/* Menu labels use the muted token so section headers stay quiet. */
+.mantine-Menu-label {
+  color: var(--muted);
+}
