@@ -1,4 +1,6 @@
 import { useState, useSyncExternalStore } from 'react'
+import { ActionIcon, Button, Checkbox, Group, Text, TextInput } from '@mantine/core'
+import { IconChevronLeft, IconChevronRight, IconX } from '@tabler/icons-react'
 import type { EditorController } from '../editor/EditorController'
 import type { MotifModel } from '../analysis/motif/MotifModel'
 
@@ -30,48 +32,63 @@ export function MotifSearch({ model, onClose }: Props) {
 
   return (
     <div className="motif-panel">
-      <div className="cluster-head">
-        <span className="scores-title">Motif search</span>
-        <button className="scores-close" onClick={onClose} title="Close">
-          ✕
-        </button>
+      <div className="panel-head">
+        <span className="panel-title">Motif search</span>
+        <ActionIcon variant="subtle" color="gray" onClick={onClose} aria-label="Close">
+          <IconX size={16} />
+        </ActionIcon>
       </div>
 
       <div className="cluster-section">
-        <input
-          className="select motif-input"
+        <TextInput
+          size="xs"
           value={text}
           placeholder="e.g. C-X-X-C  →  C(A,C,D){2}C"
           spellCheck={false}
-          autoFocus
-          onChange={(e) => onChange(e.target.value)}
+          data-autofocus
+          error={err || undefined}
+          onChange={(e) => onChange(e.currentTarget.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') model.findNext()
           }}
+          styles={{ input: { fontFamily: 'var(--mono)' } }}
         />
-        <div className="motif-hint">
-          Residues, ambiguity <code>B Z X</code>, groups <code>(A,C)</code>, repeats{' '}
-          <code>{'{m,n}'}</code>, <code>~</code> not, <code>&lt;</code>/<code>&gt;</code> anchors.
-        </div>
+        <Text fz="xs" c="dimmed" mt={6}>
+          Residues, ambiguity <code>B Z X</code>, groups <code>(A,C)</code>, repeats <code>{'{m,n}'}</code>,{' '}
+          <code>~</code> not, <code>&lt;</code>/<code>&gt;</code> anchors.
+        </Text>
       </div>
 
-      {err && <div className="motif-error">{err}</div>}
-
-      <div className="cluster-actions">
-        <button className="btn" onClick={() => model.findPrev()} disabled={count === 0} title="Previous match">
-          ‹ Prev
-        </button>
-        <button className="btn" onClick={() => model.findNext()} disabled={count === 0} title="Next match">
-          Next ›
-        </button>
-        <label className="cluster-check">
-          <input type="checkbox" checked={model.isActive()} disabled={count === 0} onChange={(e) => model.setActive(e.target.checked)} />
-          Highlight
-        </label>
-        <span className="motif-count">
+      <Group gap="xs" mt="xs" align="center">
+        <Button
+          variant="default"
+          size="compact-xs"
+          leftSection={<IconChevronLeft size={14} />}
+          onClick={() => model.findPrev()}
+          disabled={count === 0}
+        >
+          Prev
+        </Button>
+        <Button
+          variant="default"
+          size="compact-xs"
+          rightSection={<IconChevronRight size={14} />}
+          onClick={() => model.findNext()}
+          disabled={count === 0}
+        >
+          Next
+        </Button>
+        <Checkbox
+          size="xs"
+          label="Highlight"
+          checked={model.isActive()}
+          disabled={count === 0}
+          onChange={(e) => model.setActive(e.currentTarget.checked)}
+        />
+        <Text fz="xs" c="dimmed">
           {count === 0 ? (text.trim() && !err ? 'no matches' : '') : `${idx + 1} / ${count}`}
-        </span>
-      </div>
+        </Text>
+      </Group>
     </div>
   )
 }

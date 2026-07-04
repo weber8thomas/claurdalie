@@ -1621,3 +1621,16 @@ kbd {
 .mantine-Menu-item[data-active] .mantine-Menu-itemSection {
   color: var(--accent);
 }
+
+/* Shared panel header (Phase D): consistent title + trailing close action. */
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: 10px;
+}
+.panel-title {
+  font-weight: 600;
+  font-size: 12px;
+  flex: 1 1 auto;
+}

@@ -1,9 +1,12 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react'
+import { ActionIcon } from '@mantine/core'
+import { IconX } from '@tabler/icons-react'
 import type { EditorController } from '../editor/EditorController'
 import type { GroupModel } from '../analysis/cluster/GroupModel'
 import type { MotifModel } from '../analysis/motif/MotifModel'
 import { BarcodeRenderer, LIGHT_BARCODE, DARK_BARCODE, type BarcodeLane } from '../render/BarcodeRenderer'
 import { countColumn, newCounts } from '../analysis/conservation/columnCounts'
+import { CATEGORICAL } from '../color/palette'
 import { useEditorSnapshot } from './useEditor'
 
 const PANEL_H = 132
@@ -68,7 +71,7 @@ export function BarcodePanel({ ctrl, group, motif, onClose }: Props) {
   useEffect(() => {
     const specs: LaneSpec[] = group.hasGroups()
       ? group.groups().map((g) => ({ name: g.name, color: g.color, rows: g.rows }))
-      : [{ name: 'All sequences', color: '#5b7cf0', rows: Array.from({ length: ctrl.store.height }, (_, v) => v) }]
+      : [{ name: 'All sequences', color: CATEGORICAL[2], rows: Array.from({ length: ctrl.store.height }, (_, v) => v) }]
     lanesRef.current = ctrl.store.height > 0 ? computeLanes(ctrl, specs, motif) : []
     repaint()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -110,9 +113,10 @@ export function BarcodePanel({ ctrl, group, motif, onClose }: Props) {
       <div className="scores-chrome">
         <span className="scores-title">Barcode</span>
         <span className="barcode-sub">{group.hasGroups() ? `${group.clusterInfos().length} groups` : 'no clusters'}</span>
-        <button className="scores-close" title="Hide barcode" onClick={onClose}>
-          ✕
-        </button>
+        <div style={{ flex: 1 }} />
+        <ActionIcon variant="subtle" color="gray" onClick={onClose} aria-label="Hide barcode">
+          <IconX size={16} />
+        </ActionIcon>
       </div>
       <canvas ref={canvasRef} className="scores-canvas" />
     </div>

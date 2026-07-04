@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { ActionIcon, SegmentedControl } from '@mantine/core'
+import { IconMinus, IconPlus, IconX } from '@tabler/icons-react'
 import type { EditorController } from '../editor/EditorController'
 import type { ConservationModel } from '../analysis/conservation/ConservationModel'
 import type { GroupModel } from '../analysis/cluster/GroupModel'
@@ -216,30 +218,23 @@ export function Minimap({ ctrl, width, height, conservation, group, onResize, on
   return (
     <div className="minimap" style={{ width: W, height: H }}>
       <div className="mm-resize" title="Resize" onPointerDown={startResize} />
-      <button className="mm-close" title="Hide overview" onClick={onClose}>
-        ×
-      </button>
+      <ActionIcon className="mm-close" variant="subtle" color="gray" size="sm" title="Hide overview" onClick={onClose} aria-label="Hide overview">
+        <IconX size={14} />
+      </ActionIcon>
       <div className="mm-chrome">
-        <div className="mm-seg">
-          {OVERLAYS.map((o) => (
-            <button
-              key={o.id}
-              className={'mm-seg-btn' + (overlay === o.id ? ' active' : '')}
-              disabled={!o.enabled}
-              title={`${o.label} overlay`}
-              onClick={() => setOverlay(o.id)}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          size="xs"
+          value={overlay}
+          onChange={(v) => setOverlay(v as Overlay)}
+          data={OVERLAYS.map((o) => ({ value: o.id, label: o.label, disabled: !o.enabled }))}
+        />
         <div className="mm-zoom">
-          <button className="mm-seg-btn" title="Zoom out" onClick={() => zoom(1 / 1.3)}>
-            −
-          </button>
-          <button className="mm-seg-btn" title="Zoom in" onClick={() => zoom(1.3)}>
-            +
-          </button>
+          <ActionIcon variant="default" size="sm" title="Zoom out" onClick={() => zoom(1 / 1.3)} aria-label="Zoom out">
+            <IconMinus size={13} />
+          </ActionIcon>
+          <ActionIcon variant="default" size="sm" title="Zoom in" onClick={() => zoom(1.3)} aria-label="Zoom in">
+            <IconPlus size={13} />
+          </ActionIcon>
         </div>
       </div>
       <canvas

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { ActionIcon, Button, NumberInput, Select, Text, TextInput } from '@mantine/core'
+import { IconFileImport, IconX } from '@tabler/icons-react'
 import type { EditorController } from '../editor/EditorController'
 import type { StructureController } from '../structure/StructureController'
 import type { VariantModel } from '../analysis/variant/VariantModel'
 import { impactColor, type Variant } from '../analysis/variant/types'
-import { Icon } from './Icon'
 
 interface Props {
   ctrl: EditorController
@@ -86,89 +87,98 @@ export function VariantPanel({ ctrl, structure, model, prefill, onConsumePrefill
 
   return (
     <div className="variant-panel">
-      <div className="align-chrome">
-        <span className="align-title">Variants</span>
-        <select
-          className="select"
-          value={model.sourceId()}
-          onChange={(e) => model.setSource(e.target.value)}
+      <div className="panel-head">
+        <span className="panel-title">Variants</span>
+        <Select
+          size="xs"
+          w={150}
           title="Choose a mutation-effect scorer"
-        >
-          {model.sources().map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-        <button className="align-close" title="Close" onClick={onClose}>
-          <Icon name="x" size={14} />
-        </button>
+          data={model.sources().map((s) => ({ value: s.id, label: s.label }))}
+          value={model.sourceId()}
+          onChange={(v) => v && model.setSource(v)}
+          allowDeselect={false}
+        />
+        <ActionIcon variant="subtle" color="gray" onClick={onClose} aria-label="Close">
+          <IconX size={16} />
+        </ActionIcon>
       </div>
 
       {/* Add form */}
       <div className="variant-add">
-        <select className="select vp-seq" value={seqName} onChange={(e) => setSeqName(e.target.value)} title="Sequence">
-          {names.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
-        <input
-          className="select vp-pos"
-          type="number"
+        <Select
+          size="xs"
+          className="vp-seq"
+          title="Sequence"
+          data={names}
+          value={seqName}
+          onChange={(v) => v && setSeqName(v)}
+          allowDeselect={false}
+        />
+        <NumberInput
+          size="xs"
+          className="vp-pos"
           min={1}
           max={ungapped || undefined}
-          value={posStr}
+          value={posStr === '' ? '' : Number(posStr)}
           placeholder="pos"
-          onChange={(e) => setPosStr(e.target.value)}
+          hideControls
+          onChange={(v) => setPosStr(v === '' ? '' : String(v))}
           title={`1-based ungapped position (1..${ungapped})`}
         />
         <span className="vp-from" title="Reference residue at this position">
           {from ?? '·'}
         </span>
         <span className="vp-arrow">→</span>
-        <select className="select vp-to" value={to} onChange={(e) => setTo(e.target.value)} title="Alternate residue">
-          {RESIDUES.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
-          ))}
-          <option value="-">− (del)</option>
-        </select>
-        <input
-          className="select vp-label"
+        <Select
+          size="xs"
+          className="vp-to"
+          title="Alternate residue"
+          data={[...RESIDUES.map((r) => ({ value: r, label: r })), { value: '-', label: '− (del)' }]}
+          value={to}
+          onChange={(v) => v && setTo(v)}
+          allowDeselect={false}
+        />
+        <TextInput
+          size="xs"
+          className="vp-label"
           value={label}
           placeholder="label (optional)"
-          onChange={(e) => setLabel(e.target.value)}
+          onChange={(e) => setLabel(e.currentTarget.value)}
         />
-        <button className="align-btn" disabled={!canAdd} onClick={addVariant} title="Add variant">
+        <Button size="compact-xs" disabled={!canAdd} onClick={addVariant} title="Add variant">
           Add
-        </button>
+        </Button>
       </div>
 
       {/* Actions */}
       <div className="variant-actions">
-        <button className="align-btn" onClick={() => fileRef.current?.click()} title="Import CSV/TSV (seq,pos,from,to,label)">
-          <Icon name="import" size={13} /> Import
-        </button>
-        <button
-          className="align-btn primary"
+        <Button
+          size="compact-xs"
+          variant="default"
+          leftSection={<IconFileImport size={13} />}
+          onClick={() => fileRef.current?.click()}
+          title="Import CSV/TSV (seq,pos,from,to,label)"
+        >
+          Import
+        </Button>
+        <Button
+          size="compact-xs"
           disabled={model.isBusy() || results.length === 0}
+          loading={model.isBusy()}
           onClick={scoreAll}
           title="Score all variants with the selected source"
         >
-          {model.isBusy() ? 'Scoring…' : 'Score'}
-        </button>
+          Score
+        </Button>
         {model.isBusy() && (
-          <button className="align-cancel" onClick={() => model.cancel()}>
+          <Button size="compact-xs" variant="subtle" color="gray" onClick={() => model.cancel()}>
             Cancel
-          </button>
+          </Button>
         )}
         {results.length > 0 && (
-          <button className="align-btn" onClick={() => model.clear()} title="Remove all variants">
+          <Button size="compact-xs" variant="default" onClick={() => model.clear()} title="Remove all variants">
             Clear
-          </button>
+          </Button>
         )}
         <input
           ref={fileRef}
@@ -184,28 +194,28 @@ export function VariantPanel({ ctrl, structure, model, prefill, onConsumePrefill
       </div>
 
       {model.errorText() && (
-        <div className="align-error">
+        <Text fz="xs" c="red" mt="xs">
           {model.errorText()}
           {model.errorKindText() === 'blocked' && (
-            <div className="align-note">The endpoint is unreachable — switch to the Local scorer to score offline.</div>
+            <Text c="dimmed" fz="xs">The endpoint is unreachable — switch to the Local scorer to score offline.</Text>
           )}
-        </div>
+        </Text>
       )}
       {importErrors.length > 0 && (
-        <div className="align-error">
+        <Text fz="xs" c="red" mt="xs">
           {importErrors.slice(0, 4).map((e, i) => (
             <div key={i}>{e}</div>
           ))}
           {importErrors.length > 4 && <div>…and {importErrors.length - 4} more</div>}
-        </div>
+        </Text>
       )}
 
       {/* Results */}
       {results.length === 0 ? (
-        <div className="align-note">
+        <Text c="dimmed" fz="xs" mt="xs">
           Add a substitution above, import a CSV/TSV, or right-click a residue → “Add variant here”.
           {source?.needsNetwork ? ' Then press Score.' : ' It scores automatically.'}
-        </div>
+        </Text>
       ) : (
         <div className="variant-results">
           <table className="vp-table">
@@ -257,8 +267,10 @@ export function VariantPanel({ ctrl, structure, model, prefill, onConsumePrefill
                   </td>
                   <td className="vp-actions-cell">
                     {structure && model.canFold(r.variant) && r.visualRow >= 0 && (
-                      <button
-                        className="vp-fold"
+                      <Button
+                        size="compact-xs"
+                        variant="default"
+                        mr={4}
                         title="Fold the mutant & compare to wild-type in 3D (online)"
                         disabled={structBusy}
                         onClick={(e) => {
@@ -268,9 +280,12 @@ export function VariantPanel({ ctrl, structure, model, prefill, onConsumePrefill
                         }}
                       >
                         {structBusy ? '…' : 'Fold 3D'}
-                      </button>
+                      </Button>
                     )}
-                    <button
+                    <ActionIcon
+                      variant="subtle"
+                      color="gray"
+                      size="sm"
                       className="vp-del"
                       title="Remove"
                       onClick={(e) => {
@@ -278,8 +293,8 @@ export function VariantPanel({ ctrl, structure, model, prefill, onConsumePrefill
                         model.remove(r.key)
                       }}
                     >
-                      ✕
-                    </button>
+                      <IconX size={14} />
+                    </ActionIcon>
                   </td>
                 </tr>
               ))}

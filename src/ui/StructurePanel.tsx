@@ -1,10 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSyncExternalStore } from 'react'
+import { ActionIcon, Button, SegmentedControl } from '@mantine/core'
+import {
+  IconEye,
+  IconEyeOff,
+  IconMaximize,
+  IconMinimize,
+  IconPhoto,
+  IconRefresh,
+  IconX,
+} from '@tabler/icons-react'
 import type { EditorController } from '../editor/EditorController'
 import type { StructureController } from '../structure/StructureController'
 import { createStructureViewer, type StructureViewer, type ColorMode, type Representation } from '../structure/viewer'
 import { useEditorSnapshot } from './useEditor'
-import { Icon } from './Icon'
 import type { HoverPayload } from '../editor/interaction'
 
 const MIN_W = 240
@@ -145,25 +154,31 @@ export function StructurePanel({ ctrl, structure, hover, width, height, onResize
     <div className={'structure-panel' + (fullscreen ? ' fullscreen' : '')} style={boxStyle}>
       {!fullscreen && <div className="sp-resize-bl" title="Resize" onPointerDown={startResize} />}
       <div className="sp-head">
-        <span className="sp-title">3D structure</span>
-        <button className="mm-close" title={fullscreen ? 'Exit full screen' : 'Full screen'} onClick={() => setFullscreen((f) => !f)}>
-          {fullscreen ? '🡖' : '⛶'}
-        </button>
-        <button className="mm-close" title="Hide structure panel" onClick={onClose}>
-          ×
-        </button>
+        <span className="panel-title">3D structure</span>
+        <ActionIcon
+          variant="subtle"
+          color="gray"
+          title={fullscreen ? 'Exit full screen' : 'Full screen'}
+          onClick={() => setFullscreen((f) => !f)}
+          aria-label="Toggle full screen"
+        >
+          {fullscreen ? <IconMinimize size={16} /> : <IconMaximize size={16} />}
+        </ActionIcon>
+        <ActionIcon variant="subtle" color="gray" title="Hide structure panel" onClick={onClose} aria-label="Close">
+          <IconX size={16} />
+        </ActionIcon>
       </div>
 
       <div className="sp-toolbar">
-        <button className="btn sp-btn" onClick={foldActive} disabled={st.busy || snap.rows === 0} title="Fold the selected sequence(s) via ESMFold (online)">
-          {st.busy ? 'Folding…' : ctrl.selectedRowCount() > 1 ? `Fold ${ctrl.selectedRowCount()}` : 'Fold sequence'}
-        </button>
-        <button className="btn sp-btn" onClick={() => foldFileRef.current?.click()} title="Load a local PDB structure (offline)">
+        <Button size="compact-xs" onClick={foldActive} loading={st.busy} disabled={snap.rows === 0} title="Fold the selected sequence(s) via ESMFold (online)">
+          {ctrl.selectedRowCount() > 1 ? `Fold ${ctrl.selectedRowCount()}` : 'Fold sequence'}
+        </Button>
+        <Button size="compact-xs" variant="default" onClick={() => foldFileRef.current?.click()} title="Load a local PDB structure (offline)">
           Load PDB…
-        </button>
-        <button className="btn sp-btn" onClick={() => compareFileRef.current?.click()} disabled={st.models.length === 0} title="Load a known structure and superpose it onto a folded model">
+        </Button>
+        <Button size="compact-xs" variant="default" onClick={() => compareFileRef.current?.click()} disabled={st.models.length === 0} title="Load a known structure and superpose it onto a folded model">
           Compare…
-        </button>
+        </Button>
         <input ref={foldFileRef} type="file" accept=".pdb,.ent,.cif,.mmcif,.txt" hidden
           onChange={(e) => { const f = e.target.files?.[0]; if (f) f.text().then((t) => { structure.loadFile(t, f.name); onToast(`Loaded ${f.name}`) }); e.target.value = '' }} />
         <input ref={compareFileRef} type="file" accept=".pdb,.ent,.cif,.mmcif,.txt" hidden
@@ -171,23 +186,29 @@ export function StructurePanel({ ctrl, structure, hover, width, height, onResize
       </div>
 
       <div className="sp-controls">
-        <div className="sp-seg-group" role="group" aria-label="Color mode">
+        <div className="sp-seg-group">
           <span className="sp-seg-label">Color</span>
-          {COLOR_MODES.map((c) => (
-            <button key={c.id} className={'sp-seg' + (st.colorMode === c.id ? ' active' : '')} onClick={() => structure.setColorMode(c.id)}>
-              {c.label}
-            </button>
-          ))}
+          <SegmentedControl
+            size="xs"
+            value={st.colorMode}
+            onChange={(v) => structure.setColorMode(v as ColorMode)}
+            data={COLOR_MODES.map((c) => ({ value: c.id, label: c.label }))}
+          />
         </div>
-        <div className="sp-seg-group" role="group" aria-label="Representation">
+        <div className="sp-seg-group">
           <span className="sp-seg-label">View</span>
-          {VIEWS.map((v) => (
-            <button key={v.id} className={'sp-seg' + (st.representation === v.id ? ' active' : '')} onClick={() => structure.setRepresentation(v.id)}>
-              {v.label}
-            </button>
-          ))}
-          <button className="sp-seg" title="Reset view" onClick={() => viewerRef.current?.resetView()}>Reset</button>
-          <button className="sp-seg" title="Save PNG image" onClick={saveImage} disabled={st.models.length === 0}>Image</button>
+          <SegmentedControl
+            size="xs"
+            value={st.representation}
+            onChange={(v) => structure.setRepresentation(v as Representation)}
+            data={VIEWS.map((v) => ({ value: v.id, label: v.label }))}
+          />
+          <ActionIcon variant="default" title="Reset view" onClick={() => viewerRef.current?.resetView()} aria-label="Reset view">
+            <IconRefresh size={15} />
+          </ActionIcon>
+          <ActionIcon variant="default" title="Save PNG image" onClick={saveImage} disabled={st.models.length === 0} aria-label="Save image">
+            <IconPhoto size={15} />
+          </ActionIcon>
         </div>
       </div>
 
@@ -218,18 +239,26 @@ export function StructurePanel({ ctrl, structure, hover, width, height, onResize
               <span className="sp-model-meta">
                 {m.residues} res{m.linked ? ' · linked' : ''}{m.kind === 'compare' ? ' · cmp' : ''}
               </span>
-              <button
-                className={'sp-model-eye' + (m.visible ? ' on' : '')}
+              <ActionIcon
+                variant="subtle"
+                color={m.visible ? 'teal' : 'gray'}
+                size="sm"
+                className="sp-model-eye"
                 title={m.visible ? 'Hide from 3D view' : 'Show in 3D view'}
                 onClick={() => structure.toggleModelVisibility(m.id)}
+                aria-label="Toggle visibility"
               >
-                <Icon name={m.visible ? 'eye' : 'eye-off'} size={14} />
-              </button>
-              <button className="sp-model-x" title="Remove" onClick={() => structure.removeModel(m.id)}>×</button>
+                {m.visible ? <IconEye size={14} /> : <IconEyeOff size={14} />}
+              </ActionIcon>
+              <ActionIcon variant="subtle" color="gray" size="sm" title="Remove" onClick={() => structure.removeModel(m.id)} aria-label="Remove">
+                <IconX size={14} />
+              </ActionIcon>
             </div>
           ))}
           {st.models.length > 1 && (
-            <button className="sp-clear" onClick={() => structure.clearAll()}>Clear all</button>
+            <Button size="compact-xs" variant="subtle" color="gray" onClick={() => structure.clearAll()}>
+              Clear all
+            </Button>
           )}
         </div>
       )}
