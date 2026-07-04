@@ -1,38 +1,52 @@
-import { useRef } from 'react'
+import { useRef, useSyncExternalStore } from 'react'
+import { ActionIcon, Button, Group, Menu, Select, Text, Tooltip } from '@mantine/core'
+import {
+  IconAlignLeft,
+  IconArrowBackUp,
+  IconArrowForwardUp,
+  IconBarcode,
+  IconBinaryTree,
+  IconCheck,
+  IconChevronDown,
+  IconChartHistogram,
+  IconCopy,
+  IconCube,
+  IconDeviceFloppy,
+  IconEye,
+  IconFileExport,
+  IconFileImport,
+  IconFlask,
+  IconHelp,
+  IconInfoCircle,
+  IconMap,
+  IconMapPin,
+  IconMaximize,
+  IconMessage,
+  IconMinus,
+  IconMoon,
+  IconPalette,
+  IconPencil,
+  IconPlus,
+  IconRowInsertBottom,
+  IconRowRemove,
+  IconSearch,
+  IconSun,
+  IconTable,
+  IconTrash,
+  IconUsersGroup,
+} from '@tabler/icons-react'
 import type { EditorController } from '../editor/EditorController'
+import type { ProjectStore } from '../project/ProjectStore'
 import { useEditorSnapshot } from './useEditor'
-import { Icon } from './Icon'
+import { usePanels, type PanelKey } from './panelsStore'
 import { BrandMark } from './BrandMark'
 
 interface Props {
   ctrl: EditorController
+  project: ProjectStore | null
   onToast: (msg: string) => void
   onToggleHelp: () => void
   onAbout: () => void
-  showLegend: boolean
-  showMinimap: boolean
-  showStructure: boolean
-  showScores: boolean
-  showCluster: boolean
-  showTree: boolean
-  showAlign: boolean
-  showIdentity: boolean
-  showMotif: boolean
-  showBarcode: boolean
-  showVariant: boolean
-  tooltipEnabled: boolean
-  onToggleLegend: () => void
-  onToggleMinimap: () => void
-  onToggleStructure: () => void
-  onToggleScores: () => void
-  onToggleCluster: () => void
-  onToggleTree: () => void
-  onToggleAlign: () => void
-  onToggleIdentity: () => void
-  onToggleMotif: () => void
-  onToggleBarcode: () => void
-  onToggleVariant: () => void
-  onToggleTooltip: () => void
 }
 
 const SCHEMES = [
@@ -43,44 +57,62 @@ const SCHEMES = [
   { id: 'plain', label: 'Plain' },
 ]
 
-export function Toolbar({
-  ctrl,
-  onToast,
-  onToggleHelp,
-  onAbout,
-  showLegend,
-  showMinimap,
-  showStructure,
-  showScores,
-  showCluster,
-  showTree,
-  showAlign,
-  showIdentity,
-  showMotif,
-  showBarcode,
-  showVariant,
-  tooltipEnabled,
-  onToggleLegend,
-  onToggleMinimap,
-  onToggleStructure,
-  onToggleScores,
-  onToggleCluster,
-  onToggleTree,
-  onToggleAlign,
-  onToggleIdentity,
-  onToggleMotif,
-  onToggleBarcode,
-  onToggleVariant,
-  onToggleTooltip,
-}: Props) {
-  const snap = useEditorSnapshot(ctrl)
-  const fileRef = useRef<HTMLInputElement>(null)
+const ICON = 16
 
-  const onImport = async (file: File) => {
+/** A menu item that toggles a boolean and shows a check when it is on. */
+function CheckItem({
+  icon,
+  label,
+  checked,
+  onClick,
+}: {
+  icon: React.ReactNode
+  label: string
+  checked: boolean
+  onClick: () => void
+}) {
+  return (
+    <Menu.Item
+      leftSection={icon}
+      rightSection={checked ? <IconCheck size={14} /> : null}
+      onClick={onClick}
+      data-active={checked || undefined}
+    >
+      {label}
+    </Menu.Item>
+  )
+}
+
+/** The menu-bar trigger: a subtle button with a chevron. */
+function MenuButton({ label }: { label: string }) {
+  return (
+    <Button variant="subtle" color="gray" size="xs" rightSection={<IconChevronDown size={13} />}>
+      {label}
+    </Button>
+  )
+}
+
+export function Toolbar({ ctrl, project, onToast, onToggleHelp, onAbout }: Props) {
+  const snap = useEditorSnapshot(ctrl)
+  const panels = usePanels()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const projRef = useRef<HTMLInputElement>(null)
+
+  // Subscribe to the project so the instance Select reflects forks/switches.
+  const projKey = useSyncExternalStore(
+    (fn) => (project ? project.subscribe(fn) : () => {}),
+    () => (project ? project.listKey() : ''),
+  )
+  const instances = project ? project.list() : []
+  const activeInstance = instances.find((i) => i.active)
+
+  const toggle = (k: PanelKey) => panels.toggle(k)
+
+  const onImportFasta = async (file: File) => {
     ctrl.loadFasta(await file.text())
     onToast(`Imported ${file.name} — ${ctrl.store.height} sequences`)
   }
-  const onExport = () => {
+  const onExportFasta = () => {
     const blob = new Blob([ctrl.exportFasta()], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -109,175 +141,371 @@ export function Toolbar({
     }
   }
 
+  // ---- Project (instance) operations, folded in from the old SnapshotBar ----
+  const exportProject = async () => {
+    if (!project) return
+    try {
+      const bytes = await project.toFile()
+      const blob = new Blob([bytes as BlobPart], { type: 'application/gzip' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'project.clproj'
+      a.click()
+      URL.revokeObjectURL(url)
+      onToast('Exported project.clproj')
+    } catch {
+      onToast('Export failed')
+    }
+  }
+  const importProject = async (file: File) => {
+    if (!project) return
+    try {
+      await project.fromFile(new Uint8Array(await file.arrayBuffer()))
+      onToast(`Imported ${file.name}`)
+    } catch {
+      onToast('Import failed — not a valid .clproj file')
+    }
+  }
+  const renameInstance = () => {
+    if (!project || !activeInstance) return
+    const name = window.prompt('Rename instance', activeInstance.name)
+    if (name) project.rename(activeInstance.id, name.trim() || activeInstance.name)
+  }
+  const deleteInstance = () => {
+    if (!project || !activeInstance) return
+    if (window.confirm(`Delete instance "${activeInstance.name}"?`)) project.remove(activeInstance.id)
+  }
+
+  // ---- Editing actions (operate on the current cursor / selection) ----
+  const canEdit = snap.cursorMode
+  const cursorRow = snap.cursor?.row ?? -1
+  const copy = async (text: string | null, what: string) => {
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+      onToast(`Copied ${what}`)
+    } catch {
+      onToast('Clipboard unavailable')
+    }
+  }
+  const removeGapCols = () => {
+    const n = ctrl.removeGapOnlyColumns()
+    onToast(n ? `Removed ${n} gap-only column${n > 1 ? 's' : ''}` : 'No gap-only columns')
+  }
+
   const zoomPct = Math.round((snap.cellW / 16) * 100)
 
   return (
-    <div className="toolbar">
+    <div className="toolbar" data-rev={projKey}>
       <div className="brand">
         <BrandMark />
         Claurdalie
       </div>
 
-      <div className="tb-group">
-        <button className="btn" onClick={() => fileRef.current?.click()} title="Import alignment (FASTA)">
-          <Icon name="import" /> Import
-        </button>
-        <button className="btn" onClick={onExport} title="Export alignment (FASTA)">
-          <Icon name="export" /> Export
-        </button>
-        <select
-          className="select"
-          value=""
-          onChange={(e) => {
-            loadExample(e.target.value)
-            e.target.value = ''
-          }}
-          title="Load example alignment"
-        >
-          <option value="">Examples…</option>
-          <option value="light">Demo — cytochrome c</option>
-          <option value="heavy">Heavy — 3k × 10k</option>
-          <option value="huge">Huge — 10k × 30k</option>
-        </select>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".fasta,.fa,.faa,.txt,.aln"
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) void onImport(f)
-            e.target.value = ''
-          }}
-        />
-      </div>
+      <Group gap={2} wrap="nowrap" className="menubar">
+        {/* ---------------- File ---------------- */}
+        <Menu>
+          <Menu.Target>
+            <div>
+              <MenuButton label="File" />
+            </div>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Item leftSection={<IconFileImport size={ICON} />} onClick={() => fileRef.current?.click()}>
+              Import FASTA…
+            </Menu.Item>
+            <Menu.Item leftSection={<IconFileExport size={ICON} />} onClick={onExportFasta}>
+              Export FASTA
+            </Menu.Item>
+            <Menu.Divider />
+            <Menu.Label>Examples</Menu.Label>
+            <Menu.Item leftSection={<IconFlask size={ICON} />} onClick={() => loadExample('light')}>
+              Demo · cytochrome c
+            </Menu.Item>
+            <Menu.Item leftSection={<IconFlask size={ICON} />} onClick={() => loadExample('heavy')}>
+              Heavy · 3k × 10k
+            </Menu.Item>
+            <Menu.Item leftSection={<IconFlask size={ICON} />} onClick={() => loadExample('huge')}>
+              Huge · 10k × 30k
+            </Menu.Item>
+            <Menu.Divider />
+            <Menu.Label>Project</Menu.Label>
+            <Menu.Sub>
+              <Menu.Sub.Target>
+                <Menu.Sub.Item leftSection={<IconDeviceFloppy size={ICON} />}>Instance</Menu.Sub.Item>
+              </Menu.Sub.Target>
+              <Menu.Sub.Dropdown>
+                <Menu.Item
+                  leftSection={<IconPlus size={ICON} />}
+                  onClick={() => {
+                    project?.newSnapshot()
+                    onToast('Forked a new instance')
+                  }}
+                >
+                  New instance
+                </Menu.Item>
+                <Menu.Item
+                  leftSection={<IconDeviceFloppy size={ICON} />}
+                  onClick={() => {
+                    project?.overwrite()
+                    onToast('Instance saved')
+                  }}
+                >
+                  Overwrite
+                </Menu.Item>
+                <Menu.Item leftSection={<IconPencil size={ICON} />} onClick={renameInstance}>
+                  Rename…
+                </Menu.Item>
+                <Menu.Item
+                  leftSection={<IconTrash size={ICON} />}
+                  color="red"
+                  disabled={instances.length <= 1}
+                  onClick={deleteInstance}
+                >
+                  Delete
+                </Menu.Item>
+              </Menu.Sub.Dropdown>
+            </Menu.Sub>
+            <Menu.Item leftSection={<IconFileExport size={ICON} />} onClick={() => void exportProject()}>
+              Export project (.clproj)
+            </Menu.Item>
+            <Menu.Item leftSection={<IconFileImport size={ICON} />} onClick={() => projRef.current?.click()}>
+              Import project (.clproj)
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
 
-      <div className="tb-group">
-        <label className="tb-label" htmlFor="scheme">
-          Color
-        </label>
-        <select id="scheme" className="select" value={snap.schemeId} onChange={(e) => ctrl.setSchemeId(e.target.value)}>
-          {SCHEMES.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-      </div>
+        {/* ---------------- Edit ---------------- */}
+        <Menu>
+          <Menu.Target>
+            <div>
+              <MenuButton label="Edit" />
+            </div>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <CheckItem
+              icon={<IconPencil size={ICON} />}
+              label="Edit mode (F2)"
+              checked={snap.cursorMode}
+              onClick={() => ctrl.toggleCursorMode()}
+            />
+            <Menu.Item
+              leftSection={<IconArrowBackUp size={ICON} />}
+              disabled={!snap.canUndo}
+              onClick={() => ctrl.undoAction()}
+            >
+              Undo <Text span c="dimmed" fz="xs">⌘Z</Text>
+            </Menu.Item>
+            <Menu.Item
+              leftSection={<IconArrowForwardUp size={ICON} />}
+              disabled={!snap.canRedo}
+              onClick={() => ctrl.redoAction()}
+            >
+              Redo <Text span c="dimmed" fz="xs">⌘⇧Z</Text>
+            </Menu.Item>
+            <Menu.Divider />
+            <Menu.Item leftSection={<IconRowInsertBottom size={ICON} />} disabled={!canEdit} onClick={() => ctrl.insertGap()}>
+              Insert gap
+            </Menu.Item>
+            <Menu.Item leftSection={<IconRowRemove size={ICON} />} disabled={!canEdit} onClick={() => ctrl.deleteGap()}>
+              Delete gap
+            </Menu.Item>
+            <Menu.Item leftSection={<IconArrowBackUp size={ICON} />} disabled={!canEdit} onClick={() => ctrl.shiftTargets(-1)}>
+              Shift left <Text span c="dimmed" fz="xs">⌘←</Text>
+            </Menu.Item>
+            <Menu.Item leftSection={<IconArrowForwardUp size={ICON} />} disabled={!canEdit} onClick={() => ctrl.shiftTargets(1)}>
+              Shift right <Text span c="dimmed" fz="xs">⌘→</Text>
+            </Menu.Item>
+            <Menu.Divider />
+            <Menu.Item leftSection={<IconRowRemove size={ICON} />} disabled={!canEdit} onClick={removeGapCols}>
+              Remove gap-only columns
+            </Menu.Item>
+            <Menu.Item
+              leftSection={<IconCopy size={ICON} />}
+              disabled={cursorRow < 0}
+              onClick={() => void copy(ctrl.rowFasta(cursorRow), 'sequence')}
+            >
+              Copy sequence (FASTA)
+            </Menu.Item>
+            <Menu.Item
+              leftSection={<IconCopy size={ICON} />}
+              disabled={!snap.selection}
+              onClick={() => void copy(ctrl.selectionFasta(), 'selection')}
+            >
+              Copy selection (FASTA)
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
 
-      <div className="tb-group">
-        <button className="icon" onClick={() => ctrl.zoomBy(1 / 1.15)} title="Zoom out (−)">
-          <Icon name="minus" />
-        </button>
-        <span className="zoom-label">{zoomPct}%</span>
-        <button className="icon" onClick={() => ctrl.zoomBy(1.15)} title="Zoom in (+)">
-          <Icon name="plus" />
-        </button>
-        <button className="icon" onClick={() => ctrl.resetZoom()} title="Reset zoom (0)">
-          <Icon name="fit" />
-        </button>
-      </div>
+        {/* ---------------- View ---------------- */}
+        <Menu closeOnItemClick={false}>
+          <Menu.Target>
+            <div>
+              <MenuButton label="View" />
+            </div>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Label>Color scheme</Menu.Label>
+            {SCHEMES.map((s) => (
+              <CheckItem
+                key={s.id}
+                icon={<IconPalette size={ICON} />}
+                label={s.label}
+                checked={snap.schemeId === s.id}
+                onClick={() => ctrl.setSchemeId(s.id)}
+              />
+            ))}
+            <Menu.Divider />
+            <CheckItem icon={<IconPalette size={ICON} />} label="Legend" checked={panels.legend} onClick={() => toggle('legend')} />
+            <CheckItem icon={<IconMap size={ICON} />} label="Minimap" checked={panels.minimap} onClick={() => toggle('minimap')} />
+            <CheckItem icon={<IconMessage size={ICON} />} label="Residue tooltip" checked={panels.tooltip} onClick={() => panels.setTooltip(!panels.tooltip)} />
+            <Menu.Divider />
+            <CheckItem
+              icon={snap.dark ? <IconSun size={ICON} /> : <IconMoon size={ICON} />}
+              label={snap.dark ? 'Light theme' : 'Dark theme'}
+              checked={snap.dark}
+              onClick={() => ctrl.setDark(!snap.dark)}
+            />
+          </Menu.Dropdown>
+        </Menu>
 
-      <div className="tb-group">
-        <button
-          className={'btn' + (snap.cursorMode ? ' active' : '')}
-          onClick={() => ctrl.toggleCursorMode()}
-          title="Toggle edit mode (F2)"
-        >
-          <Icon name="edit" /> Edit
-        </button>
-        <button className="icon" disabled={!snap.canUndo} onClick={() => ctrl.undoAction()} title="Undo (⌘Z)">
-          <Icon name="undo" />
-        </button>
-        <button className="icon" disabled={!snap.canRedo} onClick={() => ctrl.redoAction()} title="Redo (⌘⇧Z)">
-          <Icon name="redo" />
-        </button>
-      </div>
+        {/* ---------------- Analysis ---------------- */}
+        <Menu closeOnItemClick={false}>
+          <Menu.Target>
+            <div>
+              <MenuButton label="Analysis" />
+            </div>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <CheckItem icon={<IconChartHistogram size={ICON} />} label="Conservation scores" checked={panels.scores} onClick={() => toggle('scores')} />
+            <CheckItem icon={<IconUsersGroup size={ICON} />} label="Clustering & groups" checked={panels.cluster} onClick={() => toggle('cluster')} />
+            <CheckItem icon={<IconBarcode size={ICON} />} label="Barcode" checked={panels.barcode} onClick={() => toggle('barcode')} />
+            <CheckItem icon={<IconBinaryTree size={ICON} />} label="Phylogenetic tree" checked={panels.tree} onClick={() => toggle('tree')} />
+            <CheckItem icon={<IconTable size={ICON} />} label="Sequence identity" checked={panels.identity} onClick={() => toggle('identity')} />
+            <CheckItem icon={<IconSearch size={ICON} />} label="Motif search" checked={panels.motif} onClick={() => toggle('motif')} />
+            <CheckItem icon={<IconMapPin size={ICON} />} label="Variant / mutation-effect" checked={panels.variant} onClick={() => toggle('variant')} />
+            <Menu.Divider />
+            <CheckItem icon={<IconAlignLeft size={ICON} />} label="Re-align sequences" checked={panels.align} onClick={() => toggle('align')} />
+          </Menu.Dropdown>
+        </Menu>
+
+        {/* ---------------- Structure ---------------- */}
+        <Menu closeOnItemClick={false}>
+          <Menu.Target>
+            <div>
+              <MenuButton label="Structure" />
+            </div>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <CheckItem icon={<IconCube size={ICON} />} label="3D structure panel" checked={panels.structure} onClick={() => toggle('structure')} />
+          </Menu.Dropdown>
+        </Menu>
+
+        {/* ---------------- Help ---------------- */}
+        <Menu>
+          <Menu.Target>
+            <div>
+              <MenuButton label="Help" />
+            </div>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Item leftSection={<IconHelp size={ICON} />} onClick={onToggleHelp}>
+              Keyboard shortcuts <Text span c="dimmed" fz="xs">?</Text>
+            </Menu.Item>
+            <Menu.Item leftSection={<IconInfoCircle size={ICON} />} onClick={onAbout}>
+              About Claurdalie
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
+      </Group>
 
       <div className="spacer" />
 
-      <div className="tb-group">
-        <button className={'icon' + (showLegend ? ' active' : '')} onClick={onToggleLegend} title="Color legend">
-          <Icon name="palette" />
-        </button>
-        <button className={'icon' + (showMinimap ? ' active' : '')} onClick={onToggleMinimap} title="Minimap">
-          <Icon name="map" />
-        </button>
-        <button
-          className={'icon' + (showScores ? ' active' : '')}
-          onClick={onToggleScores}
-          title="Conservation scores"
-        >
-          <Icon name="chart" />
-        </button>
-        <button
-          className={'icon' + (showCluster ? ' active' : '')}
-          onClick={onToggleCluster}
-          title="Clustering & groups"
-        >
-          <Icon name="group" />
-        </button>
-        <button
-          className={'icon' + (showBarcode ? ' active' : '')}
-          onClick={onToggleBarcode}
-          title="Barcode (per-group conservation)"
-        >
-          <Icon name="barcode" />
-        </button>
-        <button className={'icon' + (showTree ? ' active' : '')} onClick={onToggleTree} title="Phylogenetic tree">
-          <Icon name="tree" />
-        </button>
-        <button
-          className={'icon' + (showIdentity ? ' active' : '')}
-          onClick={onToggleIdentity}
-          title="Sequence identity"
-        >
-          <Icon name="identity" />
-        </button>
-        <button
-          className={'icon' + (showMotif ? ' active' : '')}
-          onClick={onToggleMotif}
-          title="Motif search (GCG FindPatterns)"
-        >
-          <Icon name="search" />
-        </button>
-        <button
-          className={'icon' + (showVariant ? ' active' : '')}
-          onClick={onToggleVariant}
-          title="Variant / mutation-effect analysis"
-        >
-          <Icon name="variant" />
-        </button>
-        <button className={'icon' + (showAlign ? ' active' : '')} onClick={onToggleAlign} title="Re-align sequences">
-          <Icon name="align" />
-        </button>
-        <button
-          className={'icon' + (showStructure ? ' active' : '')}
-          onClick={onToggleStructure}
-          title="3D structure panel"
-        >
-          <Icon name="cube" />
-        </button>
-        <button
-          className={'icon' + (tooltipEnabled ? ' active' : '')}
-          onClick={onToggleTooltip}
-          title="Residue tooltip on hover"
-        >
-          <Icon name="message" />
-        </button>
-      </div>
+      {/* High-frequency controls stay always-visible on the right. */}
+      <Group gap={4} wrap="nowrap">
+        <ActionIcon.Group>
+          <Tooltip label="Zoom out (−)">
+            <ActionIcon variant="default" onClick={() => ctrl.zoomBy(1 / 1.15)} aria-label="Zoom out">
+              <IconMinus size={ICON} />
+            </ActionIcon>
+          </Tooltip>
+          <Button variant="default" size="xs" px={8} onClick={() => ctrl.resetZoom()} title="Reset zoom (0)">
+            {zoomPct}%
+          </Button>
+          <Tooltip label="Zoom in (+)">
+            <ActionIcon variant="default" onClick={() => ctrl.zoomBy(1.15)} aria-label="Zoom in">
+              <IconPlus size={ICON} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Reset zoom (0)">
+            <ActionIcon variant="default" onClick={() => ctrl.resetZoom()} aria-label="Reset zoom">
+              <IconMaximize size={ICON} />
+            </ActionIcon>
+          </Tooltip>
+        </ActionIcon.Group>
 
-      <div className="tb-group" style={{ borderRight: 'none' }}>
-        <button className="icon" onClick={() => ctrl.setDark(!snap.dark)} title="Toggle theme">
-          <Icon name={snap.dark ? 'sun' : 'moon'} />
-        </button>
-        <button className="icon" onClick={onToggleHelp} title="Keyboard shortcuts (?)">
-          <Icon name="help" />
-        </button>
-        <button className="icon" onClick={onAbout} title="About Claurdalie">
-          <Icon name="info" />
-        </button>
-      </div>
+        <ActionIcon.Group>
+          <Tooltip label="Toggle edit mode (F2)">
+            <ActionIcon
+              variant={snap.cursorMode ? 'filled' : 'default'}
+              onClick={() => ctrl.toggleCursorMode()}
+              aria-label="Edit mode"
+            >
+              <IconPencil size={ICON} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Undo (⌘Z)">
+            <ActionIcon variant="default" disabled={!snap.canUndo} onClick={() => ctrl.undoAction()} aria-label="Undo">
+              <IconArrowBackUp size={ICON} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Redo (⌘⇧Z)">
+            <ActionIcon variant="default" disabled={!snap.canRedo} onClick={() => ctrl.redoAction()} aria-label="Redo">
+              <IconArrowForwardUp size={ICON} />
+            </ActionIcon>
+          </Tooltip>
+        </ActionIcon.Group>
+
+        {project && instances.length > 0 && (
+          <Tooltip label="Switch analytical instance (state is preserved)">
+            <Select
+              className="instance-select"
+              size="xs"
+              w={190}
+              leftSection={<IconEye size={14} />}
+              data={instances.map((i) => ({ value: String(i.id), label: `${i.name} · ${i.sequences}×${i.columns}` }))}
+              value={activeInstance ? String(activeInstance.id) : null}
+              onChange={(v) => v && project.switchTo(Number(v))}
+              allowDeselect={false}
+              comboboxProps={{ width: 260, position: 'bottom-end' }}
+            />
+          </Tooltip>
+        )}
+      </Group>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".fasta,.fa,.faa,.txt,.aln"
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) void onImportFasta(f)
+          e.target.value = ''
+        }}
+      />
+      <input
+        ref={projRef}
+        type="file"
+        accept=".clproj"
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) void importProject(f)
+          e.target.value = ''
+        }}
+      />
     </div>
   )
 }

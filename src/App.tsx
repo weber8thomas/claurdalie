@@ -15,7 +15,6 @@ import { ContextMenu, type MenuState } from './ui/ContextMenu'
 import { AATooltip } from './ui/AATooltip'
 import { StructurePanel } from './ui/StructurePanel'
 import { StructureController } from './structure/StructureController'
-import { SnapshotBar } from './ui/SnapshotBar'
 import { ScoresPanel } from './ui/ScoresPanel'
 import { ClusterDialog } from './ui/ClusterDialog'
 import { TreePanel } from './ui/TreePanel'
@@ -34,6 +33,7 @@ import { GroupModel } from './analysis/cluster/GroupModel'
 import { TreeModel } from './tree/TreeModel'
 import type { SerializableModule } from './project/types'
 import { loadPrefs, savePrefs } from './editor/persistence'
+import { usePanels } from './ui/panelsStore'
 import type { Hit } from './render/GridRenderer'
 import type { HoverPayload } from './editor/interaction'
 
@@ -46,17 +46,9 @@ export default function App() {
   const [about, setAbout] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [menu, setMenu] = useState<MenuState | null>(null)
-  const [showLegend, setShowLegend] = useState(() => loadPrefs().showLegend ?? true)
-  const [showMinimap, setShowMinimap] = useState(() => loadPrefs().showMinimap ?? true)
-  const [showStructure, setShowStructure] = useState(() => loadPrefs().showStructure ?? false)
-  const [showScores, setShowScores] = useState(() => loadPrefs().showScores ?? false)
-  const [showCluster, setShowCluster] = useState(false)
-  const [showTree, setShowTree] = useState(false)
-  const [showAlign, setShowAlign] = useState(false)
-  const [showIdentity, setShowIdentity] = useState(false)
-  const [showMotif, setShowMotif] = useState(false)
-  const [showBarcode, setShowBarcode] = useState(() => loadPrefs().showBarcode ?? false)
-  const [showVariant, setShowVariant] = useState(false)
+  // Panel visibility + tooltip now live in a small Zustand store so the menu bar
+  // can toggle them directly (no more prop drilling); App just reads it.
+  const panels = usePanels()
   const [variantPrefill, setVariantPrefill] = useState<{ seqName: string; position: number } | null>(null)
   const [scoresH, setScoresH] = useState(() => loadPrefs().scoresH ?? 104)
   const [structure, setStructure] = useState<StructureController | null>(null)
@@ -75,28 +67,22 @@ export default function App() {
     const p = loadPrefs()
     return { w: p.structureW ?? 380, h: p.structureH ?? 460 }
   })
-  const [tooltipEnabled, setTooltipEnabled] = useState(() => loadPrefs().tooltipEnabled ?? true)
   const [hover, setHover] = useState<HoverPayload | null>(null)
 
   const showToast = useCallback((msg: string) => {
     notifications.show({ message: msg, autoClose: 2400, withBorder: true })
   }, [])
 
+  // Panel-size prefs stay here (the visibility bools persist via panelsStore).
   useEffect(() => {
     savePrefs({
-      showLegend,
-      showMinimap,
-      showStructure,
-      showScores,
-      showBarcode,
       scoresH,
-      tooltipEnabled,
       minimapW: minimapSize.w,
       minimapH: minimapSize.h,
       structureW: structureSize.w,
       structureH: structureSize.h,
     })
-  }, [showLegend, showMinimap, showStructure, showScores, showBarcode, scoresH, tooltipEnabled, minimapSize, structureSize])
+  }, [scoresH, minimapSize, structureSize])
 
   // The structure controller lives alongside the editor and survives panel
   // open/close so a folded structure isn't lost when the panel is toggled.
@@ -237,9 +223,9 @@ export default function App() {
       const info = ctrl.describeCell(hit.row, hit.col)
       if (info.ungapped == null) return
       setVariantPrefill({ seqName: ctrl.store.rowName(hit.row), position: info.ungapped })
-      setShowVariant(true)
+      panels.set('variant', true)
     },
-    [ctrl],
+    [ctrl, panels],
   )
 
   const onDrop = async (e: React.DragEvent) => {
@@ -269,36 +255,12 @@ export default function App() {
       {ctrl && (
         <Toolbar
           ctrl={ctrl}
+          project={project}
           onToast={showToast}
           onToggleHelp={toggleHelp}
           onAbout={() => setAbout(true)}
-          showLegend={showLegend}
-          showMinimap={showMinimap}
-          showStructure={showStructure}
-          showScores={showScores}
-          showCluster={showCluster}
-          showTree={showTree}
-          showAlign={showAlign}
-          showIdentity={showIdentity}
-          showMotif={showMotif}
-          showBarcode={showBarcode}
-          showVariant={showVariant}
-          tooltipEnabled={tooltipEnabled}
-          onToggleLegend={() => setShowLegend((s) => !s)}
-          onToggleMinimap={() => setShowMinimap((s) => !s)}
-          onToggleStructure={() => setShowStructure((s) => !s)}
-          onToggleScores={() => setShowScores((s) => !s)}
-          onToggleCluster={() => setShowCluster((s) => !s)}
-          onToggleTree={() => setShowTree((s) => !s)}
-          onToggleAlign={() => setShowAlign((s) => !s)}
-          onToggleIdentity={() => setShowIdentity((s) => !s)}
-          onToggleMotif={() => setShowMotif((s) => !s)}
-          onToggleBarcode={() => setShowBarcode((s) => !s)}
-          onToggleVariant={() => setShowVariant((s) => !s)}
-          onToggleTooltip={() => setTooltipEnabled((s) => !s)}
         />
       )}
-      {ctrl && project && <SnapshotBar project={project} onToast={showToast} />}
       <div className="main">
         <AlignmentCanvas
           onReady={setCtrl}
@@ -306,8 +268,8 @@ export default function App() {
           onContextMenu={openContextMenu}
           onHover={setHover}
         />
-        {ctrl && showLegend && <SchemeLegend ctrl={ctrl} onClose={() => setShowLegend(false)} />}
-        {ctrl && showMinimap && (
+        {ctrl && panels.legend && <SchemeLegend ctrl={ctrl} onClose={() => panels.set('legend', false)} />}
+        {ctrl && panels.minimap && (
           <Minimap
             ctrl={ctrl}
             width={minimapSize.w}
@@ -315,25 +277,25 @@ export default function App() {
             conservation={conservation}
             group={groups}
             onResize={(w, h) => setMinimapSize({ w, h })}
-            onClose={() => setShowMinimap(false)}
+            onClose={() => panels.set('minimap', false)}
           />
         )}
-        {ctrl && groups && showCluster && (
-          <ClusterDialog ctrl={ctrl} group={groups} onClose={() => setShowCluster(false)} onToast={showToast} />
+        {ctrl && groups && panels.cluster && (
+          <ClusterDialog ctrl={ctrl} group={groups} onClose={() => panels.set('cluster', false)} onToast={showToast} />
         )}
-        {ctrl && showIdentity && (
-          <IdentityDialog ctrl={ctrl} group={groups} onClose={() => setShowIdentity(false)} onToast={showToast} />
+        {ctrl && panels.identity && (
+          <IdentityDialog ctrl={ctrl} group={groups} onClose={() => panels.set('identity', false)} onToast={showToast} />
         )}
-        {ctrl && motif && showMotif && (
-          <MotifSearch ctrl={ctrl} model={motif} onClose={() => setShowMotif(false)} />
+        {ctrl && motif && panels.motif && (
+          <MotifSearch ctrl={ctrl} model={motif} onClose={() => panels.set('motif', false)} />
         )}
-        {ctrl && tree && showTree && (
-          <TreePanel ctrl={ctrl} model={tree} group={groups} onClose={() => setShowTree(false)} onToast={showToast} />
+        {ctrl && tree && panels.tree && (
+          <TreePanel ctrl={ctrl} model={tree} group={groups} onClose={() => panels.set('tree', false)} onToast={showToast} />
         )}
-        {ctrl && align && showAlign && (
-          <AlignPanel ctrl={ctrl} align={align} onClose={() => setShowAlign(false)} onToast={showToast} />
+        {ctrl && align && panels.align && (
+          <AlignPanel ctrl={ctrl} align={align} onClose={() => panels.set('align', false)} onToast={showToast} />
         )}
-        {ctrl && structure && showStructure && (
+        {ctrl && structure && panels.structure && (
           <StructurePanel
             ctrl={ctrl}
             structure={structure}
@@ -341,34 +303,34 @@ export default function App() {
             width={structureSize.w}
             height={structureSize.h}
             onResize={(w, h) => setStructureSize({ w, h })}
-            onClose={() => setShowStructure(false)}
+            onClose={() => panels.set('structure', false)}
             onToast={showToast}
           />
         )}
-        {ctrl && variant && showVariant && (
+        {ctrl && variant && panels.variant && (
           <VariantPanel
             ctrl={ctrl}
             structure={structure}
             model={variant}
             prefill={variantPrefill}
             onConsumePrefill={() => setVariantPrefill(null)}
-            onClose={() => setShowVariant(false)}
+            onClose={() => panels.set('variant', false)}
             onToast={showToast}
           />
         )}
         {dragging && <div className="dropzone">Drop a FASTA file to load</div>}
       </div>
-      {ctrl && groups && showBarcode && (
-        <BarcodePanel ctrl={ctrl} group={groups} motif={motif} onClose={() => setShowBarcode(false)} />
+      {ctrl && groups && panels.barcode && (
+        <BarcodePanel ctrl={ctrl} group={groups} motif={motif} onClose={() => panels.set('barcode', false)} />
       )}
-      {ctrl && conservation && showScores && (
+      {ctrl && conservation && panels.scores && (
         <ScoresPanel
           ctrl={ctrl}
           model={conservation}
           group={groups}
           height={scoresH}
           onResize={setScoresH}
-          onClose={() => setShowScores(false)}
+          onClose={() => panels.set('scores', false)}
         />
       )}
       {ctrl && <StatusBar ctrl={ctrl} onAbout={() => setAbout(true)} />}
@@ -384,7 +346,7 @@ export default function App() {
           onAddVariant={proposeVariant}
         />
       )}
-      {ctrl && hover && tooltipEnabled && !menu && <AATooltip ctrl={ctrl} hover={hover} variant={variant} />}
+      {ctrl && hover && panels.tooltip && !menu && <AATooltip ctrl={ctrl} hover={hover} variant={variant} />}
       </div>
     </MantineProvider>
   )

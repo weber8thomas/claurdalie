@@ -1576,6 +1576,7 @@ kbd {
   font-family: var(--mono);
   font-size: 11px;
 }
+/* Variant fold-mutant chrome (from main v0.9.1). */
 .vp-actions-cell {
   white-space: nowrap;
   text-align: right;
@@ -1601,6 +1602,22 @@ kbd {
 }
 .vp-mut-note {
   margin-top: 3px;
-  color: var(--accent, #2bb3a3);
+  color: var(--accent);
   font-size: 10px;
+}
+
+/* ---- Mantine chrome: menu bar + active toggles (Phase C) ---- */
+.toolbar {
+  flex-wrap: nowrap;
+}
+.menubar {
+  gap: 2px;
+}
+/* Active panel/scheme toggles read as "on" with a teal tint + check. */
+.mantine-Menu-item[data-active] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.mantine-Menu-item[data-active] .mantine-Menu-itemSection {
+  color: var(--accent);
 }
