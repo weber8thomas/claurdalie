@@ -1,4 +1,6 @@
 import { useSyncExternalStore } from 'react'
+import { ActionIcon, Button, Group, Select, Text } from '@mantine/core'
+import { IconX } from '@tabler/icons-react'
 import type { EditorController } from '../editor/EditorController'
 import type { AlignController } from '../align/AlignController'
 import { useEditorSnapshot } from './useEditor'
@@ -30,44 +32,49 @@ export function AlignPanel({ ctrl, align, onClose, onToast }: Props) {
 
   return (
     <div className="align-panel">
-      <div className="align-chrome">
-        <span className="align-title">Re-align</span>
-        <select
-          className="select"
-          value={state.alignerId}
+      <div className="panel-head">
+        <span className="panel-title">Re-align</span>
+        <Select
+          size="xs"
+          w={160}
           disabled={state.busy}
-          onChange={(e) => align.setAligner(e.target.value)}
-          title="Choose an aligner"
-        >
-          {state.aligners.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.label}
-              {a.needsNetwork ? ' · online' : ''}
-            </option>
-          ))}
-        </select>
-        <button className="align-close" title="Hide re-align" onClick={onClose}>
-          ✕
-        </button>
+          data={state.aligners.map((a) => ({ value: a.id, label: a.label + (a.needsNetwork ? ' · online' : '') }))}
+          value={state.alignerId}
+          onChange={(v) => v && align.setAligner(v)}
+          allowDeselect={false}
+        />
+        <ActionIcon variant="subtle" color="gray" onClick={onClose} aria-label="Hide re-align">
+          <IconX size={16} />
+        </ActionIcon>
       </div>
       <div className="align-body">
-        <button className="align-btn" disabled={!canRun} onClick={() => void run(false)}>
-          Re-align selection
-        </button>
-        <button className="align-btn primary" disabled={!canRun} onClick={() => void run(true)}>
-          Re-align → new snapshot
-        </button>
+        <Group gap="xs">
+          <Button variant="default" disabled={!canRun} onClick={() => void run(false)}>
+            Re-align selection
+          </Button>
+          <Button disabled={!canRun} onClick={() => void run(true)}>
+            Re-align → new snapshot
+          </Button>
+        </Group>
         {state.busy && (
-          <div className="align-status">
-            <span>{state.busyMessage ?? 'Working…'}</span>
-            <button className="align-cancel" onClick={() => align.cancel()}>
+          <Group gap="xs" mt="xs">
+            <Text fz="xs" c="dimmed">
+              {state.busyMessage ?? 'Working…'}
+            </Text>
+            <Button variant="subtle" color="gray" size="compact-xs" onClick={() => align.cancel()}>
               Cancel
-            </button>
-          </div>
+            </Button>
+          </Group>
         )}
-        {state.error && <div className="align-error">{state.error}</div>}
+        {state.error && (
+          <Text fz="xs" c="red" mt="xs">
+            {state.error}
+          </Text>
+        )}
         {!state.busy && !state.error && selected < 2 && (
-          <div className="align-note">Select at least two sequences (click names in the gutter), then re-align.</div>
+          <Text fz="xs" c="dimmed" mt="xs">
+            Select at least two sequences (click names in the gutter), then re-align.
+          </Text>
         )}
       </div>
     </div>

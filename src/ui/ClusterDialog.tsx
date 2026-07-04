@@ -1,4 +1,6 @@
 import { useState, useSyncExternalStore } from 'react'
+import { ActionIcon, Button, Checkbox, Group, Radio, Select, Text, TextInput } from '@mantine/core'
+import { IconX } from '@tabler/icons-react'
 import type { EditorController } from '../editor/EditorController'
 import type { GroupModel } from '../analysis/cluster/GroupModel'
 import { CRITERIA, CLUSTER_METHODS, type ClusterCriterionId, type ClusterMethodId } from '../analysis/cluster/types'
@@ -62,71 +64,75 @@ export function ClusterDialog({ ctrl, group, onClose, onToast }: Props) {
 
   return (
     <div className="cluster-dialog">
-      <div className="cluster-head">
-        <span className="scores-title">Clustering</span>
-        <button className="scores-close" onClick={onClose} title="Close">
-          ✕
-        </button>
+      <div className="panel-head">
+        <span className="panel-title">Clustering</span>
+        <ActionIcon variant="subtle" color="gray" onClick={onClose} aria-label="Close">
+          <IconX size={16} />
+        </ActionIcon>
       </div>
 
       <div className="cluster-section">
         <div className="cluster-label">Criteria</div>
-        <div className="cluster-criteria">
+        <Group gap="xs">
           {CRITERIA.map((c) => (
-            <label key={c.id} className={'cluster-check' + (c.id === 'lifeDomain' ? ' disabled' : '')}>
-              <input
-                type="checkbox"
-                checked={criteria.has(c.id)}
-                disabled={c.id === 'lifeDomain'}
-                onChange={() => toggleCriterion(c.id)}
-              />
-              {c.label}
-            </label>
+            <Checkbox
+              key={c.id}
+              size="xs"
+              label={c.label}
+              checked={criteria.has(c.id)}
+              disabled={c.id === 'lifeDomain'}
+              onChange={() => toggleCriterion(c.id)}
+            />
           ))}
-        </div>
+        </Group>
       </div>
 
       <div className="cluster-section cluster-row">
-        <label className="cluster-label" htmlFor="cl-method">
+        <Text component="label" className="cluster-label">
           Method
-        </label>
-        <select id="cl-method" className="select" value={method} onChange={(e) => setMethod(e.target.value as ClusterMethodId)}>
-          {CLUSTER_METHODS.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
+        </Text>
+        <Select
+          size="xs"
+          w={180}
+          data={CLUSTER_METHODS.map((m) => ({ value: m.id, label: m.label }))}
+          value={method}
+          onChange={(v) => v && setMethod(v as ClusterMethodId)}
+          allowDeselect={false}
+        />
       </div>
 
       <div className="cluster-section cluster-row">
-        <span className="cluster-label">Gaps</span>
-        <label className="cluster-check">
-          <input type="radio" checked={gap === 'pairwise'} onChange={() => setGap('pairwise')} /> Pairwise
-        </label>
-        <label className="cluster-check">
-          <input type="radio" checked={gap === 'global'} onChange={() => setGap('global')} /> Global
-        </label>
+        <Text span className="cluster-label">
+          Gaps
+        </Text>
+        <Radio.Group value={gap} onChange={(v) => setGap(v as GapHandling)}>
+          <Group gap="sm">
+            <Radio size="xs" value="pairwise" label="Pairwise" />
+            <Radio size="xs" value="global" label="Global" />
+          </Group>
+        </Radio.Group>
       </div>
 
-      <div className="cluster-actions">
-        <button className="btn" onClick={() => void compute()} disabled={group.isComputing()}>
-          {group.isComputing() ? 'Computing…' : 'Compute'}
-        </button>
-        <button className="snapshot-btn" onClick={() => group.clear()} disabled={!group.hasGroups()}>
+      <Group gap="xs" mt="sm">
+        <Button onClick={() => void compute()} loading={group.isComputing()}>
+          Compute
+        </Button>
+        <Button variant="default" onClick={() => group.clear()} disabled={!group.hasGroups()}>
           No clusters
-        </button>
-      </div>
+        </Button>
+      </Group>
 
       {infos.length > 0 && (
         <div className="cluster-legend">
           {infos.map((c) => (
             <div key={c.id} className="cluster-item">
               <span className="cluster-swatch" style={{ background: c.color }} />
-              <input
+              <TextInput
+                size="xs"
+                variant="unstyled"
                 className="cluster-name"
                 defaultValue={c.name}
-                onBlur={(e) => group.renameCluster(c.id, e.target.value.trim() || c.name)}
+                onBlur={(e) => group.renameCluster(c.id, e.currentTarget.value.trim() || c.name)}
               />
               <span className="cluster-size">{c.size}</span>
             </div>

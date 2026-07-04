@@ -1,4 +1,15 @@
 import { useEffect, useRef } from 'react'
+import {
+  IconArrowLeft,
+  IconArrowRight,
+  IconArrowsMoveVertical,
+  IconCopy,
+  IconMapPin,
+  IconPencil,
+  IconRowInsertBottom,
+  IconRowRemove,
+  IconTrashX,
+} from '@tabler/icons-react'
 import type { EditorController } from '../editor/EditorController'
 import type { Hit } from '../render/GridRenderer'
 
@@ -11,9 +22,12 @@ export interface MenuState {
 interface Item {
   label: string
   onClick: () => void
+  icon?: React.ReactNode
   disabled?: boolean
   danger?: boolean
 }
+
+const ICON = 15
 
 export function ContextMenu({
   ctrl,
@@ -61,37 +75,38 @@ export function ContextMenu({
   const items: (Item | 'sep')[] = []
   if (!canEdit) {
     items.push(
-      { label: 'Enable Edit mode (F2) to modify', onClick: run(() => ctrl.toggleCursorMode()) },
+      { label: 'Enable Edit mode (F2) to modify', icon: <IconPencil size={ICON} />, onClick: run(() => ctrl.toggleCursorMode()) },
       'sep',
     )
   }
   if (inGrid && onAddVariant && ctrl.describeCell(hit.row, hit.col).ungapped != null) {
-    items.push({ label: 'Add variant here', onClick: run(() => onAddVariant(hit)) }, 'sep')
+    items.push({ label: 'Add variant here', icon: <IconMapPin size={ICON} />, onClick: run(() => onAddVariant(hit)) }, 'sep')
   }
   if (inGrid) {
     const scope = targetIsSelection ? 'selection' : 'cell'
     items.push(
-      { label: `Insert gap (${scope})`, disabled: !canEdit, onClick: run(() => { focusTarget(); ctrl.insertGap() }) },
-      { label: `Delete gap (${scope})`, disabled: !canEdit, onClick: run(() => { focusTarget(); ctrl.deleteGap() }) },
+      { label: `Insert gap (${scope})`, icon: <IconRowInsertBottom size={ICON} />, disabled: !canEdit, onClick: run(() => { focusTarget(); ctrl.insertGap() }) },
+      { label: `Delete gap (${scope})`, icon: <IconRowRemove size={ICON} />, disabled: !canEdit, onClick: run(() => { focusTarget(); ctrl.deleteGap() }) },
       'sep',
-      { label: 'Shift sequence left  ⌘←', disabled: !canEdit, onClick: run(() => { focusTarget(); ctrl.shiftTargets(-1) }) },
-      { label: 'Shift sequence right ⌘→', disabled: !canEdit, onClick: run(() => { focusTarget(); ctrl.shiftTargets(1) }) },
+      { label: 'Shift sequence left  ⌘←', icon: <IconArrowLeft size={ICON} />, disabled: !canEdit, onClick: run(() => { focusTarget(); ctrl.shiftTargets(-1) }) },
+      { label: 'Shift sequence right ⌘→', icon: <IconArrowRight size={ICON} />, disabled: !canEdit, onClick: run(() => { focusTarget(); ctrl.shiftTargets(1) }) },
       'sep',
     )
   }
   items.push(
-    { label: 'Move sequence up', disabled: !canEdit || v <= 0, onClick: run(() => ctrl.moveRowBy(v, -1)) },
-    { label: 'Move sequence down', disabled: !canEdit || v >= ctrl.store.height - 1, onClick: run(() => ctrl.moveRowBy(v, 1)) },
+    { label: 'Move sequence up', icon: <IconArrowsMoveVertical size={ICON} />, disabled: !canEdit || v <= 0, onClick: run(() => ctrl.moveRowBy(v, -1)) },
+    { label: 'Move sequence down', icon: <IconArrowsMoveVertical size={ICON} />, disabled: !canEdit || v >= ctrl.store.height - 1, onClick: run(() => ctrl.moveRowBy(v, 1)) },
     'sep',
-    { label: 'Copy sequence (FASTA)', onClick: run(() => void copy(ctrl.rowFasta(v), 'sequence')) },
+    { label: 'Copy sequence (FASTA)', icon: <IconCopy size={ICON} />, onClick: run(() => void copy(ctrl.rowFasta(v), 'sequence')) },
   )
   if (hasSelection) {
-    items.push({ label: 'Copy selection (FASTA)', onClick: run(() => void copy(ctrl.selectionFasta(), 'selection')) })
+    items.push({ label: 'Copy selection (FASTA)', icon: <IconCopy size={ICON} />, onClick: run(() => void copy(ctrl.selectionFasta(), 'selection')) })
   }
   items.push(
     'sep',
     {
       label: 'Remove gap-only columns',
+      icon: <IconTrashX size={ICON} />,
       disabled: !canEdit,
       onClick: run(() => {
         const n = ctrl.removeGapOnlyColumns()
@@ -139,6 +154,7 @@ export function ContextMenu({
             onClick={it.onClick}
             role="menuitem"
           >
+            {it.icon && <span className="ctx-icon">{it.icon}</span>}
             {it.label}
           </button>
         ),

@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { ActionIcon } from '@mantine/core'
+import { IconChevronDown, IconChevronRight, IconX } from '@tabler/icons-react'
 import type { EditorController } from '../editor/EditorController'
 import { useEditorSnapshot } from './useEditor'
 import { SCHEME_LUTS } from '../color/schemes'
@@ -25,17 +27,21 @@ export function SchemeLegend({ ctrl, onClose }: { ctrl: EditorController; onClos
   return (
     <div className="legend">
       <div className="legend-head">
-        <button
+        <ActionIcon
+          variant="subtle"
+          color="gray"
+          size="sm"
           className="legend-toggle"
           title={collapsed ? 'Expand' : 'Collapse'}
           onClick={() => setCollapsed((c) => !c)}
+          aria-label={collapsed ? 'Expand' : 'Collapse'}
         >
-          {collapsed ? '▸' : '▾'}
-        </button>
+          {collapsed ? <IconChevronRight size={14} /> : <IconChevronDown size={14} />}
+        </ActionIcon>
         <h4>{LABELS[snap.schemeId] ?? snap.schemeId}</h4>
-        <button className="legend-close" title="Hide legend" onClick={onClose}>
-          ×
-        </button>
+        <ActionIcon variant="subtle" color="gray" size="sm" title="Hide legend" onClick={onClose} aria-label="Hide legend">
+          <IconX size={14} />
+        </ActionIcon>
       </div>
       {!collapsed &&
         (lut ? (

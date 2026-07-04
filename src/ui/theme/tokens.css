@@ -1,4 +1,15 @@
 /* Design tokens: colors, spacing, radii, shadows. Light + dark themes. */
+
+/* To use a licensed Product Sans for the nav bar, add ProductSans-*.woff2 to
+   /public and uncomment:
+@font-face {
+  font-family: 'Product Sans';
+  src: url('/ProductSans-Regular.woff2') format('woff2');
+  font-weight: 400 700;
+  font-display: swap;
+}
+   then prepend 'Product Sans' to --font-nav below. */
+
 :root {
   --sp-1: 4px;
   --sp-2: 8px;
@@ -10,6 +21,11 @@
   --radius-lg: 12px;
   --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  /* Navigation bar face. Product Sans is Google-proprietary and not on Google
+     Fonts, so we ship Outfit — the standard free, geometric Product-Sans-style
+     alternative. To use a licensed Product Sans instead, drop the woff2 into
+     /public, uncomment the @font-face below, and put 'Product Sans' first here. */
+  --font-nav: 'Outfit', 'Space Grotesk', system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
   --dur: 140ms;
 

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { ActionIcon, Chip, Group, SegmentedControl, Text } from '@mantine/core'
+import { IconX } from '@tabler/icons-react'
 import type { EditorController } from '../editor/EditorController'
 import type { ConservationModel } from '../analysis/conservation/ConservationModel'
 import { METHODS, type ConservationMethodId } from '../analysis/conservation/types'
@@ -134,59 +136,54 @@ export function ScoresPanel({ ctrl, model, group, height, onResize, onClose }: P
       <div className="scores-resize" title="Resize" onPointerDown={startResize} />
       <div className="scores-chrome">
         <span className="scores-title">Conservation</span>
-        <div className="scores-mode" role="tablist" aria-label="Conservation view">
-          <button
-            role="tab"
-            aria-selected={mode === 'tracks'}
-            className={'seg' + (mode === 'tracks' ? ' on' : '')}
-            title="Overlay one or more conservation scores as tracks (Jalview-style)"
-            onClick={() => void model.setMode('tracks')}
-          >
-            Tracks
-          </button>
-          <button
-            role="tab"
-            aria-selected={mode === 'cluster'}
-            className={'seg' + (mode === 'cluster' ? ' on' : '')}
-            title="Cluster columns into well- vs. poorly-conserved residues (Cluspack-style)"
-            onClick={() => void model.setMode('cluster')}
-          >
-            Clusters
-          </button>
-        </div>
+        <SegmentedControl
+          size="xs"
+          value={mode}
+          onChange={(v) => void model.setMode(v as 'tracks' | 'cluster')}
+          data={[
+            { value: 'tracks', label: 'Tracks' },
+            { value: 'cluster', label: 'Clusters' },
+          ]}
+        />
         {mode === 'tracks' ? (
-          <div className="scores-methods">
+          <Group gap={6} className="scores-methods">
             {METHODS.map((m) => (
-              <button
+              <Chip
                 key={m.id}
-                className={'chip' + (model.isShown(m.id) ? ' on' : '')}
+                size="xs"
+                radius="sm"
+                checked={model.isShown(m.id)}
                 title={m.blurb}
-                onClick={() => void model.toggle(m.id as ConservationMethodId)}
+                onChange={() => void model.toggle(m.id as ConservationMethodId)}
               >
-                {model.isComputing(m.id) ? '…' : ''}
+                {model.isComputing(m.id) ? '… ' : ''}
                 {m.label}
-              </button>
+              </Chip>
             ))}
-          </div>
+          </Group>
         ) : (
-          <div className="scores-methods">
-            <span className="scores-sublabel">cluster on</span>
+          <Group gap={6} className="scores-methods">
+            <Text span className="scores-sublabel">
+              cluster on
+            </Text>
             {METHODS.map((m) => (
-              <button
+              <Chip
                 key={m.id}
-                className={'chip' + (clusterMethod === m.id ? ' on' : '')}
+                size="xs"
+                radius="sm"
+                checked={clusterMethod === m.id}
                 title={`Group columns by ${m.label}: ${m.blurb}`}
-                onClick={() => void model.setClusterMethod(m.id as ConservationMethodId)}
+                onChange={() => void model.setClusterMethod(m.id as ConservationMethodId)}
               >
-                {model.isComputing(m.id) && clusterMethod === m.id ? '…' : ''}
+                {model.isComputing(m.id) && clusterMethod === m.id ? '… ' : ''}
                 {m.label}
-              </button>
+              </Chip>
             ))}
-          </div>
+          </Group>
         )}
-        <button className="scores-close" title="Hide scores" onClick={onClose}>
-          ✕
-        </button>
+        <ActionIcon variant="subtle" color="gray" onClick={onClose} aria-label="Hide scores">
+          <IconX size={16} />
+        </ActionIcon>
       </div>
       <canvas ref={canvasRef} className="scores-canvas" />
     </div>

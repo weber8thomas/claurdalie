@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { ActionIcon, Button, Checkbox, Select, TextInput } from '@mantine/core'
+import { IconSearch, IconX } from '@tabler/icons-react'
 import type { EditorController } from '../editor/EditorController'
 import type { TreeModel, TreeColorBy } from '../tree/TreeModel'
 import type { GroupModel } from '../analysis/cluster/GroupModel'
@@ -313,61 +315,91 @@ export function TreePanel({ ctrl, model, group, onClose, onToast }: Props) {
   return (
     <div className="tree-panel">
       <div className="tree-head">
-        <span className="scores-title">Phylogenetic tree</span>
-        <button className="scores-close" onClick={onClose} title="Close">
-          ✕
-        </button>
+        <span className="panel-title">Phylogenetic tree</span>
+        <ActionIcon variant="subtle" color="gray" onClick={onClose} aria-label="Close">
+          <IconX size={16} />
+        </ActionIcon>
       </div>
       <div className="tree-controls">
-        <button className="btn" onClick={() => void buildTree()} disabled={model.isComputing()}>
-          {model.isComputing() ? 'Building…' : 'Build'}
-        </button>
-        <label className="cluster-check">
-          <input type="checkbox" checked={boot} onChange={(e) => setBoot(e.target.checked)} /> Bootstrap
-        </label>
-        <select className="select" value={gap} onChange={(e) => setGap(e.target.value as GapHandling)} title="Gap handling">
-          <option value="pairwise">Pairwise</option>
-          <option value="global">Global</option>
-        </select>
+        <Button size="compact-xs" onClick={() => void buildTree()} loading={model.isComputing()}>
+          Build
+        </Button>
+        <Checkbox size="xs" label="Bootstrap" checked={boot} onChange={(e) => setBoot(e.currentTarget.checked)} />
+        <Select
+          size="xs"
+          w={110}
+          title="Gap handling"
+          data={[
+            { value: 'pairwise', label: 'Pairwise' },
+            { value: 'global', label: 'Global' },
+          ]}
+          value={gap}
+          onChange={(v) => v && setGap(v as GapHandling)}
+          allowDeselect={false}
+        />
         <div className="tree-spacer" />
-        <select className="select" value={model.mode} onChange={(e) => model.setMode(e.target.value as 'dendrogram' | 'radial')}>
-          <option value="dendrogram">Dendrogram</option>
-          <option value="radial">Radial</option>
-        </select>
-        <select className="select" value={model.colorBy} onChange={(e) => model.setColorBy(e.target.value as TreeColorBy)} title="Leaf color">
-          <option value="cluster">By cluster</option>
-          <option value="phylum">By phylum</option>
-          <option value="none">No color</option>
-        </select>
-        <label className="cluster-check">
-          <input type="checkbox" checked={model.showBootstrap} onChange={(e) => model.setShowBootstrap(e.target.checked)} /> Support
-        </label>
+        <Select
+          size="xs"
+          w={130}
+          data={[
+            { value: 'dendrogram', label: 'Dendrogram' },
+            { value: 'radial', label: 'Radial' },
+          ]}
+          value={model.mode}
+          onChange={(v) => v && model.setMode(v as 'dendrogram' | 'radial')}
+          allowDeselect={false}
+        />
+        <Select
+          size="xs"
+          w={120}
+          title="Leaf color"
+          data={[
+            { value: 'cluster', label: 'By cluster' },
+            { value: 'phylum', label: 'By phylum' },
+            { value: 'none', label: 'No color' },
+          ]}
+          value={model.colorBy}
+          onChange={(v) => v && model.setColorBy(v as TreeColorBy)}
+          allowDeselect={false}
+        />
+        <Checkbox
+          size="xs"
+          label="Support"
+          checked={model.showBootstrap}
+          onChange={(e) => model.setShowBootstrap(e.currentTarget.checked)}
+        />
       </div>
       <div className="tree-controls tree-controls-2">
-        <input
-          className="tree-search"
+        <TextInput
+          size="xs"
           type="search"
+          w={160}
           placeholder="Search tips…"
+          leftSection={<IconSearch size={14} />}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => setQuery(e.currentTarget.value)}
           disabled={!hasTree}
         />
-        <button className="btn" onClick={() => model.ladderize()} disabled={!hasTree} title="Sort clades by subtree size">
+        <Button size="compact-xs" variant="default" onClick={() => model.ladderize()} disabled={!hasTree} title="Sort clades by subtree size">
           Ladderize
-        </button>
-        <label className="cluster-check" title="Scale branches by evolutionary distance (phylogram) vs equal steps (cladogram)">
-          <input type="checkbox" checked={model.branchLengths} onChange={(e) => model.setBranchLengths(e.target.checked)} /> Branch lengths
-        </label>
+        </Button>
+        <Checkbox
+          size="xs"
+          label="Branch lengths"
+          title="Scale branches by evolutionary distance (phylogram) vs equal steps (cladogram)"
+          checked={model.branchLengths}
+          onChange={(e) => model.setBranchLengths(e.currentTarget.checked)}
+        />
         <div className="tree-spacer" />
-        <button className="btn" onClick={() => void copyNewick()} disabled={!hasTree} title="Copy Newick to clipboard">
+        <Button size="compact-xs" variant="default" onClick={() => void copyNewick()} disabled={!hasTree} title="Copy Newick to clipboard">
           Copy Newick
-        </button>
-        <button className="btn" onClick={saveNewick} disabled={!hasTree} title="Download Newick (.nwk)">
+        </Button>
+        <Button size="compact-xs" variant="default" onClick={saveNewick} disabled={!hasTree} title="Download Newick (.nwk)">
           .nwk
-        </button>
-        <button className="btn" onClick={savePNG} disabled={!hasTree} title="Save tree image (.png)">
+        </Button>
+        <Button size="compact-xs" variant="default" onClick={savePNG} disabled={!hasTree} title="Save tree image (.png)">
           PNG
-        </button>
+        </Button>
       </div>
       <div className="tree-canvas-wrap" ref={wrapRef}>
         <canvas

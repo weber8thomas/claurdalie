@@ -5,17 +5,18 @@
 
 import { GUTTER_W } from './GridRenderer'
 import type { ConservationMethodId, ScoreTrack } from '../analysis/conservation/types'
+import { CATEGORICAL } from '../color/palette'
 
-/** Distinct per-method line colors (shared brand palette, extended). */
+/** Distinct per-method line colors, drawn from the shared categorical palette. */
 export const METHOD_COLORS: Record<ConservationMethodId, string> = {
-  threshold: '#2bb3a3',
-  shannon: '#5b7cf0',
-  jsd: '#f3a83c',
-  meanDistance: '#ef5d6c',
-  vectorNorm: '#8b5cf6',
-  bild: '#22c55e',
-  liu: '#eab308',
-  multi: '#ec4899',
+  threshold: CATEGORICAL[0], // teal (brand accent)
+  shannon: CATEGORICAL[2], // indigo
+  jsd: CATEGORICAL[1], // amber
+  meanDistance: CATEGORICAL[3], // coral
+  vectorNorm: CATEGORICAL[4], // violet
+  bild: CATEGORICAL[5], // green
+  liu: CATEGORICAL[6], // yellow
+  multi: CATEGORICAL[7], // pink
 }
 
 export interface TrackTheme {
