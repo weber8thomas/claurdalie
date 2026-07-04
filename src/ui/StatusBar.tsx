@@ -1,3 +1,4 @@
+import { Button } from '@mantine/core'
 import type { EditorController } from '../editor/EditorController'
 import { useEditorSnapshot } from './useEditor'
 import { APP_VERSION } from '../version'
@@ -33,9 +34,9 @@ export function StatusBar({ ctrl, onAbout }: { ctrl: EditorController; onAbout: 
       {s.cursorMode && <span className="mode">EDIT MODE</span>}
       <span>zoom {Math.round((s.cellW / 16) * 100)}%</span>
       <span className="hint">Press ? for shortcuts</span>
-      <button className="ver-tag" onClick={onAbout} title="About Claurdalie">
+      <Button variant="subtle" size="compact-xs" color="gray" onClick={onAbout} title="About Claurdalie">
         v{APP_VERSION}
-      </button>
+      </Button>
     </div>
   )
 }

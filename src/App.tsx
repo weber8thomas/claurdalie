@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { MantineProvider } from '@mantine/core'
-import { Notifications } from '@mantine/notifications'
+import { Notifications, notifications } from '@mantine/notifications'
 import { mantineTheme } from './ui/theme/mantineTheme'
 import type { EditorController } from './editor/EditorController'
 import { AlignmentCanvas } from './ui/AlignmentCanvas'
@@ -44,7 +44,6 @@ export default function App() {
   const [dark, setDark] = useState(() => loadPrefs().dark ?? false)
   const [help, setHelp] = useState(false)
   const [about, setAbout] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [showLegend, setShowLegend] = useState(() => loadPrefs().showLegend ?? true)
@@ -78,12 +77,9 @@ export default function App() {
   })
   const [tooltipEnabled, setTooltipEnabled] = useState(() => loadPrefs().tooltipEnabled ?? true)
   const [hover, setHover] = useState<HoverPayload | null>(null)
-  const toastTimer = useRef(0)
 
   const showToast = useCallback((msg: string) => {
-    setToast(msg)
-    window.clearTimeout(toastTimer.current)
-    toastTimer.current = window.setTimeout(() => setToast(null), 2400)
+    notifications.show({ message: msg, autoClose: 2400, withBorder: true })
   }, [])
 
   useEffect(() => {
@@ -389,7 +385,6 @@ export default function App() {
         />
       )}
       {ctrl && hover && tooltipEnabled && !menu && <AATooltip ctrl={ctrl} hover={hover} variant={variant} />}
-      {toast && <div className="toast">{toast}</div>}
       </div>
     </MantineProvider>
   )
