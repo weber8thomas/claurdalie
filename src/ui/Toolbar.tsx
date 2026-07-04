@@ -107,6 +107,8 @@ export function Toolbar({ ctrl, project, onToast, onToggleHelp, onAbout }: Props
   const panels = usePanels()
   const fileRef = useRef<HTMLInputElement>(null)
   const projRef = useRef<HTMLInputElement>(null)
+  // Which scope the pending .clproj import dialog is for.
+  const importMode = useRef<'instance' | 'project'>('project')
 
   // Subscribe to the project so the instance Select reflects forks/switches.
   const projKey = useSyncExternalStore(
@@ -151,28 +153,44 @@ export function Toolbar({ ctrl, project, onToast, onToggleHelp, onAbout }: Props
     }
   }
 
-  // ---- Project (instance) operations, folded in from the old SnapshotBar ----
-  const exportProject = async () => {
+  // ---- Session (.clproj) operations, folded in from the old SnapshotBar ----
+  // A session exports/imports at two scopes: the active instance, or the whole
+  // project (all instances). Import either adds a new instance or replaces all.
+  const safeName = (s: string) => s.replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '') || 'instance'
+  const download = (bytes: Uint8Array, name: string) => {
+    const blob = new Blob([bytes as BlobPart], { type: 'application/gzip' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+  const exportSession = async (scope: 'instance' | 'project') => {
     if (!project) return
     try {
-      const bytes = await project.toFile()
-      const blob = new Blob([bytes as BlobPart], { type: 'application/gzip' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'project.clproj'
-      a.click()
-      URL.revokeObjectURL(url)
-      onToast('Exported project.clproj')
+      if (scope === 'instance') {
+        download(await project.toFileActive(), `${safeName(activeInstance?.name ?? 'instance')}.clproj`)
+        onToast(`Exported instance "${activeInstance?.name ?? ''}"`)
+      } else {
+        download(await project.toFile(), 'project.clproj')
+        onToast('Exported project.clproj')
+      }
     } catch {
       onToast('Export failed')
     }
   }
-  const importProject = async (file: File) => {
+  const importSession = async (file: File) => {
     if (!project) return
     try {
-      await project.fromFile(new Uint8Array(await file.arrayBuffer()))
-      onToast(`Imported ${file.name}`)
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      if (importMode.current === 'instance') {
+        await project.addInstancesFromFile(bytes)
+        onToast(`Imported ${file.name} as new instance`)
+      } else {
+        await project.fromFile(bytes)
+        onToast(`Imported ${file.name}`)
+      }
     } catch {
       onToast('Import failed — not a valid .clproj file')
     }
@@ -277,12 +295,44 @@ export function Toolbar({ ctrl, project, onToast, onToggleHelp, onAbout }: Props
                 </Menu.Item>
               </Menu.Sub.Dropdown>
             </Menu.Sub>
-            <Menu.Item leftSection={<IconFileExport size={ICON} />} onClick={() => void exportProject()}>
-              Export project (.clproj)
-            </Menu.Item>
-            <Menu.Item leftSection={<IconFileImport size={ICON} />} onClick={() => projRef.current?.click()}>
-              Import project (.clproj)
-            </Menu.Item>
+            <Menu.Sub>
+              <Menu.Sub.Target>
+                <Menu.Sub.Item leftSection={<IconFileExport size={ICON} />}>Export session (.clproj)</Menu.Sub.Item>
+              </Menu.Sub.Target>
+              <Menu.Sub.Dropdown>
+                <Menu.Item leftSection={<IconDeviceFloppy size={ICON} />} onClick={() => void exportSession('instance')}>
+                  This instance
+                </Menu.Item>
+                <Menu.Item leftSection={<IconFileExport size={ICON} />} onClick={() => void exportSession('project')}>
+                  Whole project
+                </Menu.Item>
+              </Menu.Sub.Dropdown>
+            </Menu.Sub>
+            <Menu.Sub>
+              <Menu.Sub.Target>
+                <Menu.Sub.Item leftSection={<IconFileImport size={ICON} />}>Import session (.clproj)</Menu.Sub.Item>
+              </Menu.Sub.Target>
+              <Menu.Sub.Dropdown>
+                <Menu.Item
+                  leftSection={<IconPlus size={ICON} />}
+                  onClick={() => {
+                    importMode.current = 'instance'
+                    projRef.current?.click()
+                  }}
+                >
+                  As new instance
+                </Menu.Item>
+                <Menu.Item
+                  leftSection={<IconFileImport size={ICON} />}
+                  onClick={() => {
+                    importMode.current = 'project'
+                    projRef.current?.click()
+                  }}
+                >
+                  Replace project
+                </Menu.Item>
+              </Menu.Sub.Dropdown>
+            </Menu.Sub>
           </Menu.Dropdown>
         </Menu>
 
@@ -516,7 +566,7 @@ export function Toolbar({ ctrl, project, onToast, onToggleHelp, onAbout }: Props
         hidden
         onChange={(e) => {
           const f = e.target.files?.[0]
-          if (f) void importProject(f)
+          if (f) void importSession(f)
           e.target.value = ''
         }}
       />
