@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { neighborJoin } from './nj'
 import { serializeNewick, parseNewick, parseNexus } from './newick'
 import { bootstrapSupport } from './bootstrap'
+import { treeStats, nodeInfo, patristic } from './metrics'
 import { identityDistance } from '../analysis/cluster/distance'
 import { leafNodes, countNodes, type TreeNode } from './types'
 
@@ -87,6 +88,34 @@ begin trees;
 end;`
     const t = parseNexus(nex)
     expect(leafNodes(t.root).map((l) => l.name).sort()).toEqual(['Chimp', 'Human', 'Mouse'])
+  })
+})
+
+describe('metrics', () => {
+  const t = parseNewick('((A:1,B:1):2,(C:1,D:1):2);')
+  const idOf = (name: string) => leafNodes(t.root).find((l) => l.name === name)!.id
+
+  it('treeStats sums lengths and finds tree height', () => {
+    const s = treeStats(t)
+    expect(s.leaves).toBe(4)
+    expect(s.totalLength).toBeCloseTo(8) // 1+1+2 + 1+1+2
+    expect(s.height).toBeCloseTo(3) // 2 (internal) + 1 (tip)
+    expect(s.meanBranch).toBeCloseTo(8 / 6)
+  })
+
+  it('patristic distance goes through the LCA', () => {
+    expect(patristic(t, idOf('A'), idOf('A'))).toBe(0)
+    expect(patristic(t, idOf('A'), idOf('B'))).toBeCloseTo(2) // 1 + 1
+    expect(patristic(t, idOf('A'), idOf('C'))).toBeCloseTo(6) // (1+2) + (2+1)
+  })
+
+  it('nodeInfo reports leaf name, depth and subtree size', () => {
+    const a = nodeInfo(t, idOf('A'))!
+    expect(a.isLeaf).toBe(true)
+    expect(a.name).toBe('A')
+    expect(a.depth).toBeCloseTo(3) // 2 + 1
+    expect(a.leafCount).toBe(1)
+    expect(nodeInfo(t, 999_999)).toBeNull()
   })
 })
 
