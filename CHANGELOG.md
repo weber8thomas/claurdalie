@@ -2,6 +2,11 @@
 
 All notable changes to Claurdalie, newest first.
 
+## v0.12.2
+- Panels rail no longer covers the bottom status bar (bounded to the alignment area)
+- Floating panels open to the left of the Panels rail instead of behind it
+- Docked-panel reordering now shows live feedback: the dragged panel follows the cursor with a drop-position indicator
+
 ## v0.12.1
 - Collapsed "Panels" sidebar now fully hides docked content (no leftover bleed-through)
 - Docked panels show a drag-handle grip to make reordering discoverable

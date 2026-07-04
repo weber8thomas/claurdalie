@@ -48,6 +48,12 @@ export interface WindowSeed {
   h: number
 }
 
+/** Transient state while a docked panel is being dragged to reorder. */
+export interface DockDrag {
+  key: PanelKey
+  dropIndex: number
+}
+
 interface PanelsState extends Record<PanelKey, boolean> {
   /** Residue tooltip on hover. */
   tooltip: boolean
@@ -57,6 +63,8 @@ interface PanelsState extends Record<PanelKey, boolean> {
   zTop: number
   /** Whether the dock rail is collapsed to a thin tab. */
   railCollapsed: boolean
+  /** Live reorder state (the dragged docked panel + its would-be drop index). */
+  dockDrag: DockDrag | null
   toggle: (k: PanelKey) => void
   set: (k: PanelKey, v: boolean) => void
   setTooltip: (v: boolean) => void
@@ -70,6 +78,7 @@ interface PanelsState extends Record<PanelKey, boolean> {
   toggleCollapsed: (k: PanelKey) => void
   /** Move a docked panel to a new position in the rail (reorder by drag). */
   moveDock: (k: PanelKey, toIndex: number) => void
+  setDockDrag: (d: DockDrag | null) => void
   setRailCollapsed: (v: boolean) => void
 }
 
@@ -129,14 +138,39 @@ for (const [k, p] of Object.entries(prefs.panelWindows ?? {})) {
   }
 }
 
-/** Clamp a top-left position so at least a slice of the title bar stays on-screen. */
-function clampPos(x: number, y: number, w: number): { x: number; y: number } {
+// Dock-rail widths (kept in step with .dock-rail / .dock-rail.collapsed in CSS).
+const RAIL_W = 360
+const RAIL_COLLAPSED_W = 34
+
+/** Width reserved on the right by the Panels rail (0 when nothing is docked). */
+export function railInset(s: Pick<PanelsState, 'windows' | 'railCollapsed'>): number {
+  const anyDocked = Object.values(s.windows).some((w) => w?.docked)
+  if (!anyDocked) return 0
+  return s.railCollapsed ? RAIL_COLLAPSED_W : RAIL_W
+}
+
+/** Re-clamp every FLOATING window's x against a right inset (rail width). */
+function reclampFloating(
+  windows: Partial<Record<PanelKey, PanelWindow>>,
+  inset: number,
+): Partial<Record<PanelKey, PanelWindow>> {
+  const out = { ...windows }
+  for (const [k, w] of Object.entries(out) as [PanelKey, PanelWindow][]) {
+    if (!w || w.docked) continue
+    const p = clampPos(w.x, w.y, w.w, inset)
+    if (p.x !== w.x) out[k] = { ...w, x: p.x }
+  }
+  return out
+}
+
+/** Clamp a top-left position so the title bar stays on-screen and left of the rail. */
+function clampPos(x: number, y: number, w: number, rightInset = 0): { x: number; y: number } {
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1440
   const vh = typeof window !== 'undefined' ? window.innerHeight : 900
   const margin = 24
   const TOOLBAR_H = 44 // keep the title bar clear of the top menu bar
   return {
-    x: Math.max(margin - w, Math.min(x, vw - margin)),
+    x: Math.max(margin - w, Math.min(x, vw - rightInset - margin)),
     y: Math.max(TOOLBAR_H, Math.min(y, vh - margin)),
   }
 }
@@ -158,6 +192,7 @@ export const usePanels = create<PanelsState>((set, get) => ({
   windows: savedWindows,
   zTop: seedZ,
   railCollapsed: false,
+  dockDrag: null,
   toggle: (k) => {
     set((s) => ({ [k]: !s[k] }) as Pick<PanelsState, PanelKey>)
     persist(get())
@@ -172,7 +207,7 @@ export const usePanels = create<PanelsState>((set, get) => ({
   },
   ensureWindow: (k, seed) => {
     if (get().windows[k]) return
-    const { x, y } = clampPos(seed.x, seed.y, seed.w)
+    const { x, y } = clampPos(seed.x, seed.y, seed.w, railInset(get()))
     const z = get().zTop + 1
     set((s) => ({
       zTop: z,
@@ -186,7 +221,7 @@ export const usePanels = create<PanelsState>((set, get) => ({
   moveWindow: (k, x, y) => {
     const cur = get().windows[k]
     if (!cur) return
-    const p = clampPos(x, y, cur.w)
+    const p = clampPos(x, y, cur.w, railInset(get()))
     set((s) => ({ windows: { ...s.windows, [k]: { ...cur, x: p.x, y: p.y } } }))
     persistWindows(get())
   },
@@ -220,12 +255,14 @@ export const usePanels = create<PanelsState>((set, get) => ({
     const docked = !cur.docked
     // Docking appends to the end of the rail; leaving it drops fullscreen.
     const maxOrder = Math.max(0, ...Object.values(get().windows).map((w) => (w?.docked ? w.dockOrder : 0)))
-    set((s) => ({
-      windows: {
-        ...s.windows,
-        [k]: { ...cur, docked, fullscreen: false, collapsed: false, dockOrder: docked ? maxOrder + 1 : cur.dockOrder },
-      },
-    }))
+    const next = {
+      ...get().windows,
+      [k]: { ...cur, docked, fullscreen: false, collapsed: false, dockOrder: docked ? maxOrder + 1 : cur.dockOrder },
+    }
+    // The rail may have just appeared/disappeared — slide floating panels out from
+    // behind it (or let them reclaim the space when the last panel undocks).
+    const inset = railInset({ windows: next, railCollapsed: get().railCollapsed })
+    set({ windows: reclampFloating(next, inset) })
     persistWindows(get())
   },
   toggleFullscreen: (k) => {
@@ -257,5 +294,12 @@ export const usePanels = create<PanelsState>((set, get) => ({
     set({ windows })
     persistWindows(get())
   },
-  setRailCollapsed: (v) => set({ railCollapsed: v }),
+  setDockDrag: (d) => set({ dockDrag: d }),
+  setRailCollapsed: (v) => {
+    // Expanding the rail widens the reserved area — push floating panels left so
+    // none end up hidden behind it.
+    const inset = railInset({ windows: get().windows, railCollapsed: v })
+    set({ railCollapsed: v, windows: reclampFloating(get().windows, inset) })
+    persistWindows(get())
+  },
 }))

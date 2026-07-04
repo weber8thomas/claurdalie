@@ -326,6 +326,11 @@ export default function App() {
           />
         )}
         {dragging && <div className="dropzone">Drop a FASTA file to load</div>}
+        {/* Docked panels live in the rail (bounded to .main so it never covers the
+            status bar); floating panels portal their stable containers here. Both
+            targets stay mounted so a panel moves between them without remounting. */}
+        <div id="floating-layer" />
+        <DockRail />
       </div>
       {ctrl && groups && panels.barcode && (
         <BarcodePanel ctrl={ctrl} group={groups} motif={motif} onClose={() => panels.set('barcode', false)} />
@@ -354,11 +359,6 @@ export default function App() {
         />
       )}
       {ctrl && hover && panels.tooltip && !menu && <AATooltip ctrl={ctrl} hover={hover} variant={variant} />}
-      {/* Floating panels portal their (stable) containers here; the dock rail owns
-          the other target. Keeping both mounted lets a panel move between them
-          without React remounting its canvas. */}
-      <div id="floating-layer" />
-      <DockRail />
       </div>
     </MantineProvider>
   )

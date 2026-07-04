@@ -11,7 +11,7 @@ import {
   IconMinimize,
   IconX,
 } from '@tabler/icons-react'
-import { usePanels, type PanelKey, type WindowSeed } from '../panelsStore'
+import { usePanels, railInset, type PanelKey, type PanelWindow, type WindowSeed } from '../panelsStore'
 
 /** Insertion index in the dock rail for a given pointer Y (for reorder drag). */
 function dockIndexAtY(clientY: number, exclude: string): number {
@@ -61,14 +61,18 @@ function resolveSeed(pos: FloatingPanelProps['defaultPos'], size: { w: number; h
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1440
   const m = 16
   if (pos && typeof pos === 'object') return { x: pos.x, y: pos.y, w: size.w, h: size.h }
+  // Reserve the Panels rail's width so a right-anchored panel opens snug to its
+  // LEFT edge instead of behind it.
+  const inset = railInset(usePanels.getState())
+  const right = vw - inset - size.w - m
   switch (pos) {
     case 'top-left':
       return { x: m, y: 52, w: size.w, h: size.h }
     case 'bottom-right':
-      return { x: vw - size.w - m, y: 120, w: size.w, h: size.h }
+      return { x: right, y: 120, w: size.w, h: size.h }
     case 'top-right':
     default:
-      return { x: vw - size.w - m, y: 52, w: size.w, h: size.h }
+      return { x: right, y: 52, w: size.w, h: size.h }
   }
 }
 
@@ -103,6 +107,10 @@ export function FloatingPanel({
   const toggleFullscreen = usePanels((s) => s.toggleFullscreen)
   const toggleCollapsed = usePanels((s) => s.toggleCollapsed)
   const moveDock = usePanels((s) => s.moveDock)
+  const setDockDrag = usePanels((s) => s.setDockDrag)
+  const dockDrag = usePanels((s) => s.dockDrag)
+  const allWindows = usePanels((s) => s.windows)
+  const [dragDy, setDragDy] = useState(0)
 
   const seedRef = useRef<WindowSeed | null>(null)
   if (seedRef.current === null) seedRef.current = resolveSeed(defaultPos, defaultSize)
@@ -159,18 +167,27 @@ export function FloatingPanel({
     if ((e.target as HTMLElement).closest('.fp-btn')) return // button, not a drag
 
     if (docked) {
+      // Lift-and-drop: the dragged panel follows the cursor (transform) and a drop
+      // line shows where it will land; the reorder is committed only on release —
+      // no jumpy live reflow.
       const sy = e.clientY
+      let dropIndex = -1
       let moved = false
       const move = (ev: PointerEvent) => {
-        if (!moved && Math.abs(ev.clientY - sy) < 6) return
+        if (!moved && Math.abs(ev.clientY - sy) < 5) return
         moved = true
         document.body.classList.add('fp-dragging')
-        moveDock(panelKey, dockIndexAtY(ev.clientY, panelKey))
+        setDragDy(ev.clientY - sy)
+        dropIndex = dockIndexAtY(ev.clientY, panelKey)
+        setDockDrag({ key: panelKey, dropIndex })
       }
       const up = () => {
         window.removeEventListener('pointermove', move)
         window.removeEventListener('pointerup', up)
         document.body.classList.remove('fp-dragging')
+        if (moved && dropIndex >= 0) moveDock(panelKey, dropIndex)
+        setDragDy(0)
+        setDockDrag(null)
       }
       window.addEventListener('pointermove', move)
       window.addEventListener('pointerup', up)
@@ -254,6 +271,27 @@ export function FloatingPanel({
           ? ['e', 'w']
           : []
 
+  // Live-reorder decorations: which panel is being dragged, and where the drop
+  // line should show relative to THIS docked panel.
+  const isDragged = docked && dockDrag?.key === panelKey
+  const otherDockedKeys =
+    docked && dockDrag && dockDrag.key !== panelKey
+      ? (Object.entries(allWindows).filter(([, w]) => w?.docked) as [PanelKey, PanelWindow][])
+          .sort((a, b) => a[1].dockOrder - b[1].dockOrder)
+          .map(([key]) => key)
+          .filter((key) => key !== dockDrag.key)
+      : []
+  const myOtherIdx = otherDockedKeys.indexOf(panelKey)
+  const dropBefore = myOtherIdx >= 0 && dockDrag!.dropIndex === myOtherIdx
+  const dropAfter = myOtherIdx >= 0 && dockDrag!.dropIndex >= otherDockedKeys.length && myOtherIdx === otherDockedKeys.length - 1
+
+  const dockedStyle: React.CSSProperties = collapsed
+    ? { order: geom.dockOrder }
+    : { height: geom.h, order: geom.dockOrder }
+  if (isDragged) {
+    dockedStyle.transform = `translateY(${dragDy}px)`
+  }
+
   const body = (
     <div
       ref={rootRef}
@@ -263,19 +301,20 @@ export function FloatingPanel({
         (fullscreen ? ' fullscreen' : '') +
         (docked ? ' docked' : '') +
         (collapsed ? ' collapsed' : '') +
+        (isDragged ? ' fp-dragging-item' : '') +
         (bodyClassName ? ' ' + bodyClassName : '')
       }
       style={
         docked
-          ? collapsed
-            ? { order: geom.dockOrder }
-            : { height: geom.h, order: geom.dockOrder }
+          ? dockedStyle
           : fullscreen
             ? undefined
             : { left: geom.x, top: geom.y, width: geom.w, height: geom.h, zIndex: geom.z }
       }
       onPointerDownCapture={() => !docked && bringToFront(panelKey)}
     >
+      {dropBefore && <div className="fp-drop-line fp-drop-before" />}
+      {dropAfter && <div className="fp-drop-line fp-drop-after" />}
       <div className={'fp-head' + (docked ? ' fp-head-dock' : '')} onPointerDown={onHeadPointerDown}>
         {docked && (
           <span className="fp-grip" title="Drag to reorder in the Panels sidebar" aria-hidden="true">

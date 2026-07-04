@@ -1315,8 +1315,8 @@ body.fp-dragging .fp-body .sp-host {
 
 /* Right-side dock rail ("volet"). */
 .dock-rail {
-  position: fixed;
-  top: 46px;
+  position: absolute;
+  top: 0;
   right: 0;
   bottom: 0;
   width: 360px;
@@ -1414,6 +1414,32 @@ body.fp-dragging .fp-body .sp-host {
 }
 .dock-rail-slot .fp-head:active {
   cursor: grabbing;
+}
+/* The panel being dragged to reorder: lifted, following the cursor. */
+.fp.docked.fp-dragging-item {
+  z-index: 5;
+  opacity: 0.92;
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+  cursor: grabbing;
+}
+/* Drop-target indicator line shown at the insertion point. */
+.fp-drop-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--panel);
+  z-index: 6;
+  pointer-events: none;
+}
+.fp-drop-before {
+  top: -5px;
+}
+.fp-drop-after {
+  bottom: -5px;
 }
 .fp-grip {
   display: inline-flex;
