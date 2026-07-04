@@ -1396,6 +1396,12 @@ body.fp-dragging .fp-body .sp-host {
   gap: 8px;
   padding: 8px;
 }
+/* When the rail is collapsed to the "Panels" tab, fully hide the docked content.
+   A class rule is needed because it beats the UA [hidden] { display:none } rule
+   that .dock-rail-slot's own display would otherwise override. */
+.dock-rail.collapsed .dock-rail-slot {
+  display: none;
+}
 .dock-rail-slot .fp {
   flex: 0 0 auto;
 }
@@ -1405,6 +1411,19 @@ body.fp-dragging .fp-body .sp-host {
 /* Docked header is a reorder grab handle. */
 .dock-rail-slot .fp-head {
   cursor: grab;
+}
+.dock-rail-slot .fp-head:active {
+  cursor: grabbing;
+}
+.fp-grip {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  margin-right: 2px;
+  cursor: grab;
+}
+.fp-grip:hover {
+  color: var(--text);
 }
 body.fp-dragging .dock-rail-slot .fp {
   transition: none;

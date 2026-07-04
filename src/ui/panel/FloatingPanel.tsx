@@ -4,6 +4,7 @@ import { ActionIcon } from '@mantine/core'
 import {
   IconChevronDown,
   IconChevronRight,
+  IconGripVertical,
   IconLayoutSidebarRightCollapse,
   IconLayoutSidebarRightExpand,
   IconMaximize,
@@ -275,7 +276,12 @@ export function FloatingPanel({
       }
       onPointerDownCapture={() => !docked && bringToFront(panelKey)}
     >
-      <div className="fp-head" onPointerDown={onHeadPointerDown}>
+      <div className={'fp-head' + (docked ? ' fp-head-dock' : '')} onPointerDown={onHeadPointerDown}>
+        {docked && (
+          <span className="fp-grip" title="Drag to reorder in the Panels sidebar" aria-hidden="true">
+            <IconGripVertical size={14} />
+          </span>
+        )}
         {docked && (
           <ActionIcon
             className="fp-btn"

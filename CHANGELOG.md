@@ -2,6 +2,10 @@
 
 All notable changes to Claurdalie, newest first.
 
+## v0.12.1
+- Collapsed "Panels" sidebar now fully hides docked content (no leftover bleed-through)
+- Docked panels show a drag-handle grip to make reordering discoverable
+
 ## v0.12.0
 - Customizable gap / whitespace display (blank / dash / dot / cross, gap fill color, grid lines) via View → "Gaps & whitespace…"
 - Dock rail overhaul: docked panels render correctly, collapse to their header, and reorder by drag; collapsed rail becomes a "Panels" tab
