@@ -14,9 +14,11 @@ export interface ViewerModel {
   plddt: (number | null)[]
   /** Solid color used in the per-model color mode. */
   color: string
+  /** Per-residue Cα deviation (Å) vs a superposition target; drives 'deviation'. */
+  deviation?: (number | null)[]
 }
 
-export type ColorMode = 'plddt' | 'model' | 'spectrum' | 'chain'
+export type ColorMode = 'plddt' | 'model' | 'spectrum' | 'chain' | 'deviation'
 export type Representation = 'cartoon' | 'trace' | 'stick' | 'sphere'
 
 export interface StructureViewer {
@@ -42,6 +44,19 @@ function plddtColor(b: number): string {
   return '#ff7d45'
 }
 
+/**
+ * Structural-difference ramp for a per-residue Cα deviation (Å): grey where
+ * there's no comparison value, cool grey/blue near zero (structures agree),
+ * warming to red as the deviation grows. Saturates around 5 Å.
+ */
+const DEV_MAX = 5
+function deviationColor(d: number | null | undefined): string {
+  if (d == null || !Number.isFinite(d)) return '#9aa3b2' // no comparison data
+  const t = Math.max(0, Math.min(1, d / DEV_MAX))
+  // 0 -> teal-blue (0.55), mid -> yellow (0.15), high -> red (0.0)
+  return hslHex(0.55 * (1 - t))
+}
+
 function hslHex(h: number, s = 0.7, l = 0.5): string {
   const f = (n: number) => {
     const k = (n + h * 12) % 12
@@ -64,6 +79,8 @@ interface Entry {
   resiMax: number
   ordinalToResi: number[]
   resiToOrdinal: Map<number, number>
+  /** Per-residue Cα deviation keyed by PDB residue number (for 'deviation'). */
+  deviationByResi: Map<number, number>
 }
 
 export async function createStructureViewer(
@@ -101,6 +118,8 @@ export async function createStructureViewer(
             return CHAIN_COLORS[c % CHAIN_COLORS.length]
           },
         }
+      case 'deviation':
+        return { colorfunc: (a: { resi?: number }) => deviationColor(a.resi != null ? e.deviationByResi.get(a.resi) : null) }
       case 'plddt':
       default:
         return { colorfunc: (a: { b?: number }) => plddtColor(typeof a.b === 'number' ? a.b : 0) }
@@ -156,6 +175,15 @@ export async function createStructureViewer(
         })
         const ordinalToResi = cas.map((a) => a.resi)
         const resiToOrdinal = new Map(ordinalToResi.map((resi, i) => [resi, i]))
+        // Deviation arrays are per-residue in Cα/ordinal order; key them by the
+        // PDB residue number so the color func can look up by atom.resi.
+        const deviationByResi = new Map<number, number>()
+        if (m.deviation) {
+          for (let i = 0; i < ordinalToResi.length; i++) {
+            const d = m.deviation[i]
+            if (d != null && Number.isFinite(d)) deviationByResi.set(ordinalToResi[i], d)
+          }
+        }
         entries.set(m.id, {
           glModel: glModel as Entry['glModel'],
           color: m.color,
@@ -163,6 +191,7 @@ export async function createStructureViewer(
           resiMax: ordinalToResi.length ? Math.max(...ordinalToResi) : 0,
           ordinalToResi,
           resiToOrdinal,
+          deviationByResi,
         })
         order.push(m.id)
       }

@@ -15,7 +15,8 @@ import { FoldCache } from './cache'
 import { ResidueColumnMap } from './mapping'
 import { structureFromFile } from './fileSource'
 import { EsmFoldSource } from './esmfold'
-import { superpose, parseCaCoords, applyTransformToPdb } from './superpose'
+import { superpose, parseCaCoords, applyTransformToPdb, caDeviations } from './superpose'
+import { applySubstitution } from '../analysis/variant/mutate'
 import type { Structure, StructureSource, FoldErrorKind } from './types'
 import { FoldError } from './types'
 import type { ColorMode, Representation, ViewerModel } from './viewer'
@@ -39,6 +40,8 @@ interface StructureModel {
   map?: ResidueColumnMap
   /** Extra note, e.g. superposition RMSD. */
   note?: string
+  /** Per-residue Cα deviation (Å) vs the superposition target (compare kind). */
+  deviation?: (number | null)[]
 }
 
 export interface ModelInfo {
@@ -139,6 +142,7 @@ export class StructureController {
       pdb: m.structure.pdb,
       plddt: m.structure.plddt,
       color: m.color,
+      deviation: m.deviation,
     }))
   }
 
@@ -205,6 +209,82 @@ export class StructureController {
     this.emit({}, true)
   }
 
+  /**
+   * Fold the MUTANT of a variant and overlay it on the wild-type fold: apply the
+   * substitution to the row's ungapped sequence, fold it (cached), superpose onto
+   * the WT fold, and store the per-residue Cα deviation so the "Difference" color
+   * mode lights up where the structures diverge. Highlights the mutated residue
+   * and switches to deviation coloring so the effect is immediately visible.
+   * On-demand (never automatic) and network-bound; degrades via typed FoldError.
+   */
+  async foldMutant(rowId: number, position: number, alt: string, label?: string): Promise<void> {
+    if (this.folding || !this.rowExists(rowId)) return
+    this.folding = true
+    this.emit({ busy: true, busyMessage: `Folding mutant…`, error: null, errorKind: null })
+    try {
+      // The wild-type fold is the comparison target; fold it first if missing.
+      const wtId = `row:${rowId}`
+      if (!this.models.has(wtId)) await this.foldOne(rowId)
+      const wt = this.models.get(wtId)
+      if (!wt) throw new FoldError('invalid', 'Could not fold the wild-type sequence')
+
+      const wtSeq = toFoldInput(this.editor.store.materializeRow(rowId)).sequence
+      const mut = applySubstitution(wtSeq, position, alt)
+      if (!mut) {
+        throw new FoldError('invalid', `Can't fold this variant — position ${position} → "${alt}" is not a substitution`)
+      }
+
+      const cached = this.cache.get(mut.sequence)
+      let structure = cached ?? (await this.source.fold(mut.sequence))
+      if (!cached) this.cache.set(mut.sequence, structure)
+
+      // Superpose onto WT and compute per-residue deviation + a summary.
+      const mobileCa = parseCaCoords(structure.pdb)
+      const refCa = parseCaCoords(wt.structure.pdb)
+      const fit = superpose(mobileCa, refCa)
+      let deviation: (number | null)[] | undefined
+      let note: string
+      const siteTag = `${mut.wild}${position}${alt.toUpperCase()}`
+      if (fit) {
+        deviation = caDeviations(mobileCa, refCa, fit.R, fit.t)
+        structure = { ...structure, pdb: applyTransformToPdb(structure.pdb, fit.R, fit.t) }
+        const dSite = deviation[position - 1]
+        const wtP = wt.structure.plddt[position - 1]
+        const mutP = structure.plddt[position - 1]
+        const dP = typeof wtP === 'number' && typeof mutP === 'number' ? mutP - wtP : null
+        note =
+          `RMSD ${fit.rmsd.toFixed(2)} Å vs ${wt.label}` +
+          (Number.isFinite(dSite) ? ` · ${(dSite as number).toFixed(1)} Å @ ${siteTag}` : '') +
+          (dP != null ? ` · ΔpLDDT ${dP >= 0 ? '+' : ''}${dP.toFixed(0)}` : '')
+      } else {
+        note = 'too few Cα to superpose'
+      }
+
+      const id = `mut:${rowId}:${position}${alt.toUpperCase()}`
+      const existing = this.models.get(id)
+      this.models.set(id, {
+        id,
+        label: label ? `${label} (${siteTag})` : `${wt.label} ${siteTag}`,
+        structure,
+        color: existing?.color ?? this.nextColor(),
+        kind: 'compare',
+        visible: true,
+        note,
+        deviation,
+      })
+      this.folding = false
+      // Show the difference immediately: deviation coloring + spotlight the site.
+      this.emit(
+        { busy: false, busyMessage: null, error: null, errorKind: null, colorMode: 'deviation', focus: { modelId: id, index: position - 1 } },
+        true,
+      )
+    } catch (e) {
+      this.folding = false
+      const err = e instanceof FoldError ? e : new FoldError('network', String(e))
+      this.emit({ busy: false, busyMessage: null, error: err.message, errorKind: err.kind })
+    }
+  }
+
   // ---- files & comparison -------------------------------------------------
 
   /** Load a local PDB as an independent model (offline). */
@@ -231,9 +311,13 @@ export class StructureController {
       const target =
         (targetId && this.models.get(targetId)) ?? [...this.models.values()].find((m) => m.kind === 'fold') ?? null
       let note: string | undefined
+      let deviation: (number | null)[] | undefined
       if (target) {
-        const fit = superpose(parseCaCoords(structure.pdb), parseCaCoords(target.structure.pdb))
+        const mobileCa = parseCaCoords(structure.pdb)
+        const refCa = parseCaCoords(target.structure.pdb)
+        const fit = superpose(mobileCa, refCa)
         if (fit) {
+          deviation = caDeviations(mobileCa, refCa, fit.R, fit.t)
           structure = { ...structure, pdb: applyTransformToPdb(structure.pdb, fit.R, fit.t) }
           note = `RMSD ${fit.rmsd.toFixed(2)} Å / ${fit.n} Cα vs ${target.label}`
         } else {
@@ -241,7 +325,7 @@ export class StructureController {
         }
       }
       const id = `cmp:${++this.fileCounter}`
-      this.models.set(id, { id, label: fileName, structure, color: this.nextColor(), kind: 'compare', visible: true, note })
+      this.models.set(id, { id, label: fileName, structure, color: this.nextColor(), kind: 'compare', visible: true, note, deviation })
       this.emit({ error: null, errorKind: null }, true)
     } catch (e) {
       const err = e instanceof FoldError ? e : new FoldError('invalid', String(e))

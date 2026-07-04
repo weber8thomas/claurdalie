@@ -1516,3 +1516,31 @@ kbd {
   font-family: var(--mono);
   font-size: 11px;
 }
+.vp-actions-cell {
+  white-space: nowrap;
+  text-align: right;
+}
+.vp-fold {
+  font-family: var(--font);
+  font-size: 10px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 6px;
+  margin-right: 4px;
+  cursor: pointer;
+}
+.vp-fold:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--border-strong);
+}
+.vp-fold:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.vp-mut-note {
+  margin-top: 3px;
+  color: var(--accent, #2bb3a3);
+  font-size: 10px;
+}

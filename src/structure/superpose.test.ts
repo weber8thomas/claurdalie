@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { superpose, applyTransform, applyTransformToPdb, parseCaCoords, type Mat3 } from './superpose'
+import { superpose, applyTransform, applyTransformToPdb, parseCaCoords, caDeviations, type Mat3 } from './superpose'
 
 type V3 = [number, number, number]
 
@@ -43,6 +43,39 @@ describe('superpose (Kabsch/Horn)', () => {
 
   it('returns null when fewer than 3 points', () => {
     expect(superpose([[0, 0, 0]], [[0, 0, 0]])).toBeNull()
+  })
+})
+
+describe('caDeviations (per-residue difference)', () => {
+  const ref: V3[] = [
+    [0, 0, 0], [1, 0, 0], [0, 2, 0], [1, 1, 1], [2, 0, 1], [0, 3, 2], [1, 2, 3],
+  ]
+
+  it('is ~0 everywhere for a pure rigid transform of the same structure', () => {
+    const R0 = rotZ(0.7)
+    const t0: V3 = [3, -2, 5]
+    const mobile = ref.map((p) => applyTransform(p, R0, t0))
+    const fit = superpose(mobile, ref)!
+    const dev = caDeviations(mobile, ref, fit.R, fit.t)
+    expect(dev).toHaveLength(ref.length)
+    for (const d of dev) expect(d).toBeLessThan(1e-6)
+  })
+
+  it('spikes at the residue that actually moved', () => {
+    const mobile = ref.map((p) => [...p] as V3)
+    mobile[3] = [mobile[3][0] + 5, mobile[3][1], mobile[3][2]] // push residue 3 out
+    const fit = superpose(mobile, ref)!
+    const dev = caDeviations(mobile, ref, fit.R, fit.t)
+    const maxIdx = dev.indexOf(Math.max(...dev))
+    expect(maxIdx).toBe(3)
+    expect(dev[3]).toBeGreaterThan(dev[0])
+  })
+
+  it('marks residues past the shorter structure as NaN', () => {
+    const fit = superpose(ref, ref)!
+    const dev = caDeviations([...ref, [9, 9, 9]], ref, fit.R, fit.t)
+    expect(dev).toHaveLength(ref.length + 1)
+    expect(Number.isNaN(dev[ref.length])).toBe(true)
   })
 })
 

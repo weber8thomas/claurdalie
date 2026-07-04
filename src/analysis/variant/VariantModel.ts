@@ -335,6 +335,34 @@ export class VariantModel implements SerializableModule<VariantSlice> {
     this.structure?.focusColumn(-1, -1)
   }
 
+  /** True if this variant can be folded as a mutant (single canonical substitution). */
+  canFold(v: Variant): boolean {
+    return !!this.structure && /^[ACDEFGHIKLMNPQRSTVWY]$/i.test(v.to)
+  }
+
+  /**
+   * Fold the mutant of a variant and overlay it on the wild-type structure in 3D
+   * (superposed, colored by per-residue deviation, mutated residue highlighted).
+   * On-demand only; the StructureController owns the busy/error/offline UX.
+   */
+  async foldMutant(v: Variant): Promise<void> {
+    if (!this.structure) return
+    const visualRow = this.nameToVisual.get(v.seqName)
+    if (visualRow == null) return
+    const rowId = this.ctrl.store.rowIdAt(visualRow)
+    await this.structure.foldMutant(rowId, v.position, v.to, v.label)
+  }
+
+  /** The RMSD/ΔpLDDT note for a variant's folded mutant model, if it exists. */
+  mutantNote(v: Variant): string | null {
+    if (!this.structure) return null
+    const visualRow = this.nameToVisual.get(v.seqName)
+    if (visualRow == null) return null
+    const rowId = this.ctrl.store.rowIdAt(visualRow)
+    const id = `mut:${rowId}:${v.position}${v.to.toUpperCase()}`
+    return this.structure.snapshot().models.find((m) => m.id === id)?.note ?? null
+  }
+
   // ---- internals ----------------------------------------------------------
 
   /** Rebuild per-sequence maps + name→visual index from the live alignment. */

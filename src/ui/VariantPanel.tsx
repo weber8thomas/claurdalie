@@ -25,6 +25,9 @@ const RESIDUES = 'ACDEFGHIKLMNPQRSTVWY'.split('')
  */
 export function VariantPanel({ ctrl, structure, model, prefill, onConsumePrefill, onClose, onToast }: Props) {
   useSyncExternalStore(model.subscribe, () => versionKey(model))
+  // Reflect structure fold state (busy / new mutant models / notes) too.
+  useSyncExternalStore(structure ? structure.subscribe : noopSub, structure ? structure.getVersion : zero)
+  const structBusy = structure?.snapshot().busy ?? false
   const dark = ctrl.isDark()
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -245,8 +248,28 @@ export function VariantPanel({ ctrl, structure, model, prefill, onConsumePrefill
                       </span>
                     )}
                   </td>
-                  <td className="vp-note">{r.note ?? ''}</td>
-                  <td>
+                  <td className="vp-note">
+                    {r.note ?? ''}
+                    {(() => {
+                      const mn = model.mutantNote(r.variant)
+                      return mn ? <div className="vp-mut-note">🧬 {mn}</div> : null
+                    })()}
+                  </td>
+                  <td className="vp-actions-cell">
+                    {structure && model.canFold(r.variant) && r.visualRow >= 0 && (
+                      <button
+                        className="vp-fold"
+                        title="Fold the mutant & compare to wild-type in 3D (online)"
+                        disabled={structBusy}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void model.foldMutant(r.variant)
+                          onToast?.('Folding mutant — open the 3D panel to compare')
+                        }}
+                      >
+                        {structBusy ? '…' : 'Fold 3D'}
+                      </button>
+                    )}
                     <button
                       className="vp-del"
                       title="Remove"
@@ -275,3 +298,7 @@ function versionKey(model: VariantModel): string {
     .map((x) => `${x.key}:${x.score}:${x.column}`)
     .join(',')}`
 }
+
+// Stable no-op store for when there's no structure controller to subscribe to.
+const noopSub = () => () => {}
+const zero = () => 0

@@ -33,6 +33,7 @@ const COLOR_MODES: { id: ColorMode; label: string }[] = [
   { id: 'model', label: 'Model' },
   { id: 'spectrum', label: 'Rainbow' },
   { id: 'chain', label: 'Chain' },
+  { id: 'deviation', label: 'Difference' },
 ]
 const VIEWS: { id: Representation; label: string }[] = [
   { id: 'cartoon', label: 'Cartoon' },

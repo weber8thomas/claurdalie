@@ -137,6 +137,29 @@ export function superpose(
   return { R, t, rmsd: Math.sqrt(sq / n), n }
 }
 
+/**
+ * Per-residue Cα deviation (Å) of `mobile` from `ref` AFTER applying the
+ * superposition transform (R, t) to `mobile` — i.e. how far each matched residue
+ * still sits from its counterpart once best-fit aligned. Length = mobile.length;
+ * residues past the shorter structure (unmatched) are NaN. This is the signal a
+ * "difference" coloring visualizes: near-zero where the two structures agree,
+ * large where they diverge (e.g. around a destabilizing mutation).
+ */
+export function caDeviations(mobile: Vec3[], ref: Vec3[], R: Mat3, t: Vec3): number[] {
+  const n = Math.min(mobile.length, ref.length)
+  const out: number[] = new Array(mobile.length)
+  for (let k = 0; k < mobile.length; k++) {
+    if (k >= n) {
+      out[k] = NaN
+      continue
+    }
+    const p = applyTransform(mobile[k], R, t)
+    const r = ref[k]
+    out[k] = Math.hypot(p[0] - r[0], p[1] - r[1], p[2] - r[2])
+  }
+  return out
+}
+
 export function applyTransform(p: Vec3, R: Mat3, t: Vec3): Vec3 {
   return [
     R[0] * p[0] + R[1] * p[1] + R[2] * p[2] + t[0],

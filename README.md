@@ -52,8 +52,12 @@ snapshot-driven exploration of an alignment's informational content, in the brow
   online **PLM-endpoint** scorer that degrades gracefully when unreachable. Impact-colored pins
   render on the alignment (green→amber→red), a results table shows the score and *what drove it*
   (which column / conservation), a hover tooltip reads `from→to · impact`, and the variant's
-  residue highlights in the **3D viewer**. Variants ride the snapshot (serialized by sequence
-  name + ungapped position) so they survive instance switches and `.clproj` export
+  residue highlights in the **3D viewer**. On demand, **fold the mutant** (ESMFold) and overlay
+  it on the wild-type structure — superposed, reporting **RMSD + ΔpLDDT at the site**, with a
+  **"Difference" color mode** that paints each residue by its Cα deviation so structural changes
+  light up (works for any two overlapping structures, not just mutants). Variants ride the
+  snapshot (serialized by sequence name + ungapped position) so they survive instance switches
+  and `.clproj` export
 - **Clustering & groups** — group sequences by identity / length / hydrophobicity / pI /
   composition using **hierarchic (Secator)**, **k-means**, **density-peaks (DPC)**, or
   **Gaussian mixture + AIC/BIC** (auto-selecting the number of groups); groups reorder the
@@ -163,7 +167,9 @@ analysis (v0.9)**. Next, in dependency order:
   optional online **PLM-endpoint** stub with the same typed-error / offline-degrade UX as the
   structure sources; impact-colored alignment pins + hover tooltip, a results table explaining
   each score, a **3D residue highlight**, and a **VariantModel** snapshot slice (serialized by
-  sequence name + ungapped position)
+  sequence name + ungapped position). **v0.9.1** adds on-demand **mutant refolding** (ESMFold)
+  with superposition onto the wild-type, an RMSD / ΔpLDDT summary, and a per-residue **Cα
+  deviation ("Difference") color mode** for comparing overlapping structures
 
 Deferred infra: WebGL/PixiJS renderer + MSDF atlas (behind the existing `Renderer` interface)
 and Rust→WASM numeric kernels, adopted where profiling on very large alignments shows a ceiling.
