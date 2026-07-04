@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Button, Group, Modal, Radio, Select, Text } from '@mantine/core'
+import { Button, Group, Radio, Select, Text } from '@mantine/core'
 import type { EditorController } from '../editor/EditorController'
 import type { GroupModel } from '../analysis/cluster/GroupModel'
 import { computeIdentity, pairIdentity, type IdentityReport } from '../analysis/identity/identity'
 import type { GapHandling } from '../analysis/cluster/distance'
+import { FloatingPanel } from './panel/FloatingPanel'
 
 interface Props {
   ctrl: EditorController
@@ -77,7 +78,17 @@ export function IdentityDialog({ ctrl, group, onClose, onToast }: Props) {
   const nameData = report?.names.map((n, i) => ({ value: String(i), label: n })) ?? []
 
   return (
-    <Modal opened onClose={onClose} title="Sequence identity" size="lg" withCloseButton>
+    <FloatingPanel
+      panelKey="identity"
+      title="Sequence identity"
+      onClose={onClose}
+      defaultPos="top-left"
+      defaultSize={{ w: 560, h: 440 }}
+      minSize={{ w: 380, h: 280 }}
+      maxSize={{ w: 760, h: 720 }}
+      resize="both"
+    >
+      <div className="identity-body">
       <div className="identity-controls">
         <Radio.Group value={scope} onChange={(v) => setScope(v as Scope)} label="Scope">
           <Group gap="sm" mt={4}>
@@ -150,6 +161,7 @@ export function IdentityDialog({ ctrl, group, onClose, onToast }: Props) {
           )}
         </>
       )}
-    </Modal>
+      </div>
+    </FloatingPanel>
   )
 }

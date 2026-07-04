@@ -162,6 +162,16 @@ export class GroupModel implements SerializableModule<GroupSlice | null> {
     }
   }
 
+  /** Recolor a cluster; repaints the grid stripe and notifies tree/barcode/legend. */
+  setClusterColor(id: number, color: string): void {
+    const c = this.clusters.find((x) => x.id === id)
+    if (!c) return
+    c.color = color
+    // Re-set the hook (same fn) so the renderer marks dirty and repaints the stripe.
+    this.ctrl.setGroupColorHook((v) => this.colorOfVisualRow(v))
+    this.emit()
+  }
+
   clear(): void {
     this.clusters = []
     this.rowToCluster.clear()

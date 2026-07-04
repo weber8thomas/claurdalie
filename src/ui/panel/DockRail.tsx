@@ -1,12 +1,13 @@
 import { ActionIcon, Text } from '@mantine/core'
-import { IconLayoutSidebarRightCollapse, IconLayoutSidebarRightExpand } from '@tabler/icons-react'
+import { IconLayoutSidebar, IconLayoutSidebarRightExpand } from '@tabler/icons-react'
 import { usePanels } from '../panelsStore'
 
 /**
- * The right-side dock rail ("volet"): a collapsible column that hosts panels the
+ * The right-side dock rail ("Panels"): a collapsible column that hosts panels the
  * user has docked. It always renders the `#dock-rail-slot` portal target so a
  * FloatingPanel can portal into it the moment it is docked; the rail chrome shows
- * only when at least one panel is actually docked.
+ * only when at least one panel is docked. Collapsed, it shrinks to a thin labeled
+ * "Panels" column with an icon.
  */
 export function DockRail() {
   const windows = usePanels((s) => s.windows)
@@ -18,23 +19,29 @@ export function DockRail() {
 
   return (
     <div className={'dock-rail' + (active ? ' active' : '') + (collapsed ? ' collapsed' : '')}>
-      <div className="dock-rail-head">
-        <ActionIcon
-          variant="subtle"
-          color="gray"
-          size="sm"
-          title={collapsed ? 'Expand dock' : 'Collapse dock'}
-          onClick={() => setCollapsed(!collapsed)}
-          aria-label="Toggle dock"
-        >
-          {collapsed ? <IconLayoutSidebarRightCollapse size={16} /> : <IconLayoutSidebarRightExpand size={16} />}
-        </ActionIcon>
-        {!collapsed && (
+      {collapsed ? (
+        <button className="dock-rail-tab" onClick={() => setCollapsed(false)} title="Expand panels" aria-label="Expand panels">
+          <IconLayoutSidebar size={16} />
+          <span className="dock-rail-tab-label">Panels</span>
+          <span className="dock-rail-badge">{dockedCount}</span>
+        </button>
+      ) : (
+        <div className="dock-rail-head">
           <Text className="dock-rail-title" component="span">
-            Docked panels
+            Panels
           </Text>
-        )}
-      </div>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            size="sm"
+            title="Collapse panels"
+            onClick={() => setCollapsed(true)}
+            aria-label="Collapse panels"
+          >
+            <IconLayoutSidebarRightExpand size={16} />
+          </ActionIcon>
+        </div>
+      )}
       {/* Portal target — kept mounted always so docking is race-free. */}
       <div id="dock-rail-slot" className="dock-rail-slot" hidden={collapsed} />
     </div>

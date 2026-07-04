@@ -10,9 +10,10 @@ export interface PanelWindowPref {
   y: number
   w: number
   h: number
-  pinned?: boolean
   docked?: boolean
   fullscreen?: boolean
+  dockOrder?: number
+  collapsed?: boolean
 }
 
 export interface Prefs {
@@ -31,6 +32,10 @@ export interface Prefs {
   showBarcode?: boolean
   /** Per-panel window geometry (position/size/pin/dock/fullscreen), keyed by PanelKey. */
   panelWindows?: Record<string, PanelWindowPref>
+  /** Gap / whitespace display style. */
+  gapGlyph?: 'blank' | 'dash' | 'dot' | 'cross'
+  gapFill?: string | null
+  gridLines?: boolean
 }
 
 export function loadPrefs(): Prefs {

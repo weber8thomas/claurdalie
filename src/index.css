@@ -646,6 +646,14 @@ kbd {
   border-radius: 3px;
   flex-shrink: 0;
 }
+.cluster-swatch-btn {
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+  padding: 0;
+}
+.cluster-swatch-btn:hover {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
 .cluster-name {
   flex: 1;
   font-size: 12px;
@@ -816,8 +824,30 @@ kbd {
   padding: 10px 12px;
   font-size: 12px;
 }
+.display-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px 12px;
+  font-size: 12px;
+  height: 100%;
+}
+.display-body .ds-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.display-body .ds-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
 
 /* ---- v0.8: identity dialog --------------------------------------------- */
+.identity-body {
+  padding: 12px 14px;
+  font-size: 12px;
+}
 .identity-modal {
   width: min(560px, 92vw);
 }
@@ -1194,6 +1224,11 @@ kbd {
   --z-panel-pinned: 120;
   --z-fullscreen: 200;
 }
+/* Portal wrapper for each panel — transparent to layout so the .fp inside
+   participates directly in the dock rail's flex column (for order/gap). */
+.fp-portal {
+  display: contents;
+}
 .fp {
   position: fixed;
   display: flex;
@@ -1301,8 +1336,9 @@ body.fp-dragging .fp-body .sp-host {
 .dock-rail-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 6px 8px 6px 12px;
   border-bottom: 1px solid var(--border);
   flex: 0 0 auto;
 }
@@ -1310,6 +1346,47 @@ body.fp-dragging .fp-body .sp-host {
   font-size: 12px;
   font-weight: 600;
   color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+/* Collapsed rail: a thin vertical "Panels" tab. */
+.dock-rail.collapsed {
+  width: 34px;
+  align-items: stretch;
+}
+.dock-rail-tab {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 4px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.dock-rail-tab:hover {
+  color: var(--accent);
+  background: var(--hover);
+}
+.dock-rail-tab-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dock-rail-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent-fg);
+  background: var(--accent);
+  border-radius: 8px;
+  min-width: 16px;
+  padding: 1px 4px;
+  text-align: center;
 }
 .dock-rail-slot {
   flex: 1 1 auto;
@@ -1321,4 +1398,14 @@ body.fp-dragging .fp-body .sp-host {
 }
 .dock-rail-slot .fp {
   flex: 0 0 auto;
+}
+.dock-rail-slot .fp.collapsed .fp-head {
+  border-bottom: none;
+}
+/* Docked header is a reorder grab handle. */
+.dock-rail-slot .fp-head {
+  cursor: grab;
+}
+body.fp-dragging .dock-rail-slot .fp {
+  transition: none;
 }

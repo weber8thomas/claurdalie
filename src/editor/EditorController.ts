@@ -17,8 +17,8 @@ import { generateHeavy } from '../datasets/heavy'
 import { LIGHT_FASTA } from '../datasets/light'
 import { loadDataset, loadPrefs, savePrefs, saveAlignmentContent, saveDatasetKind } from './persistence'
 import { buildSchemes, DEFAULT_SCHEME_ID } from '../color/schemes'
-import type { ColorScheme } from '../color/scheme'
-import { GridRenderer, type CellPos, type Selection } from '../render/GridRenderer'
+import { hex, type ColorScheme } from '../color/scheme'
+import { GridRenderer, type CellPos, type Selection, type GapGlyph } from '../render/GridRenderer'
 import { DARK_CANVAS, LIGHT_CANVAS } from '../render/theme'
 import { alignmentEdits } from '../align/apply'
 import type { AlignedSeq } from '../align/types'
@@ -323,6 +323,18 @@ export class EditorController {
   }
   isDark(): boolean {
     return this.dark
+  }
+  /**
+   * Apply the gap / whitespace display style (gap glyph, gap fill color, grid
+   * lines) to the renderer. Called on load from persisted prefs and whenever the
+   * Display style panel changes.
+   */
+  setDisplayStyle(s: { gapGlyph: GapGlyph; gapFill: string | null; gridLines: boolean }): void {
+    this.renderer.gapGlyph = s.gapGlyph
+    this.renderer.gapFill = s.gapFill ? hex(s.gapFill) : null
+    this.renderer.showGridLines = s.gridLines
+    this.renderer.markDirty()
+    this.bump()
   }
   setDark(dark: boolean): void {
     this.dark = dark

@@ -35,6 +35,8 @@ import type { SerializableModule } from './project/types'
 import { loadPrefs, savePrefs } from './editor/persistence'
 import { usePanels } from './ui/panelsStore'
 import { DockRail } from './ui/panel/DockRail'
+import { DisplayStylePanel } from './ui/DisplayStylePanel'
+import { displayStyleSnapshot } from './ui/displayStyleStore'
 import type { Hit } from './render/GridRenderer'
 import type { HoverPayload } from './editor/interaction'
 
@@ -79,6 +81,12 @@ export default function App() {
       minimapH: minimapSize.h,
     })
   }, [scoresH, minimapSize])
+
+  // Seed the renderer with the persisted gap/whitespace display style once the
+  // controller exists (the Display style panel updates it live thereafter).
+  useEffect(() => {
+    if (ctrl) ctrl.setDisplayStyle(displayStyleSnapshot())
+  }, [ctrl])
 
   // The structure controller lives alongside the editor and survives panel
   // open/close so a folded structure isn't lost when the panel is toggled.
@@ -290,6 +298,7 @@ export default function App() {
         {ctrl && motif && panels.motif && (
           <MotifSearch ctrl={ctrl} model={motif} onClose={() => panels.set('motif', false)} />
         )}
+        {ctrl && panels.display && <DisplayStylePanel ctrl={ctrl} onClose={() => panels.set('display', false)} />}
         {ctrl && tree && panels.tree && (
           <TreePanel ctrl={ctrl} model={tree} group={groups} onClose={() => panels.set('tree', false)} onToast={showToast} />
         )}
@@ -345,6 +354,10 @@ export default function App() {
         />
       )}
       {ctrl && hover && panels.tooltip && !menu && <AATooltip ctrl={ctrl} hover={hover} variant={variant} />}
+      {/* Floating panels portal their (stable) containers here; the dock rail owns
+          the other target. Keeping both mounted lets a panel move between them
+          without React remounting its canvas. */}
+      <div id="floating-layer" />
       <DockRail />
       </div>
     </MantineProvider>

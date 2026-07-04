@@ -1,7 +1,8 @@
 import { useState, useSyncExternalStore } from 'react'
-import { Button, Checkbox, Group, Radio, Select, Text, TextInput } from '@mantine/core'
+import { Button, Checkbox, ColorPicker, Group, Popover, Radio, Select, Text, TextInput } from '@mantine/core'
 import type { EditorController } from '../editor/EditorController'
 import { FloatingPanel } from './panel/FloatingPanel'
+import { CATEGORICAL } from '../color/palette'
 import type { GroupModel } from '../analysis/cluster/GroupModel'
 import { CRITERIA, CLUSTER_METHODS, type ClusterCriterionId, type ClusterMethodId } from '../analysis/cluster/types'
 import type { GapHandling } from '../analysis/cluster/distance'
@@ -129,7 +130,26 @@ export function ClusterDialog({ ctrl, group, onClose, onToast }: Props) {
         <div className="cluster-legend">
           {infos.map((c) => (
             <div key={c.id} className="cluster-item">
-              <span className="cluster-swatch" style={{ background: c.color }} />
+              <Popover width={224} position="bottom-start" withArrow shadow="md">
+                <Popover.Target>
+                  <button
+                    className="cluster-swatch cluster-swatch-btn"
+                    style={{ background: c.color }}
+                    title="Change group color"
+                    aria-label="Change group color"
+                  />
+                </Popover.Target>
+                <Popover.Dropdown p="xs">
+                  <ColorPicker
+                    size="xs"
+                    format="hex"
+                    value={c.color}
+                    onChange={(v) => group.setClusterColor(c.id, v)}
+                    swatches={[...CATEGORICAL]}
+                    swatchesPerRow={10}
+                  />
+                </Popover.Dropdown>
+              </Popover>
               <TextInput
                 size="xs"
                 variant="unstyled"

@@ -23,6 +23,7 @@ export type PanelKey =
   | 'motif'
   | 'barcode'
   | 'variant'
+  | 'display'
 
 /** Live geometry + window flags for one panel. */
 export interface PanelWindow {
@@ -31,9 +32,12 @@ export interface PanelWindow {
   w: number
   h: number
   z: number
-  pinned: boolean
   docked: boolean
   fullscreen: boolean
+  /** Order within the dock rail (lower = higher up); only meaningful when docked. */
+  dockOrder: number
+  /** Collapsed to just its header inside the dock rail. */
+  collapsed: boolean
 }
 
 /** Seed passed by a FloatingPanel on first mount (geometry only). */
@@ -61,19 +65,20 @@ interface PanelsState extends Record<PanelKey, boolean> {
   moveWindow: (k: PanelKey, x: number, y: number) => void
   resizeWindow: (k: PanelKey, w: number, h: number, x?: number, y?: number) => void
   bringToFront: (k: PanelKey) => void
-  togglePinned: (k: PanelKey) => void
   toggleDocked: (k: PanelKey) => void
   toggleFullscreen: (k: PanelKey) => void
+  toggleCollapsed: (k: PanelKey) => void
+  /** Move a docked panel to a new position in the rail (reorder by drag). */
+  moveDock: (k: PanelKey, toIndex: number) => void
   setRailCollapsed: (v: boolean) => void
 }
 
 const prefs = loadPrefs()
 
-// z bands (kept in step with the --z-panel-* CSS vars). Unpinned floating panels
-// start at BASE and climb via bringToFront; pinned panels jump to the PINNED band
-// so they always sit above unpinned ones.
+// Floating panels occupy a compact z band starting at Z_BASE. bringToFront
+// re-packs z so it never grows unbounded and always stays well below Mantine's
+// pop-up z-index (300) — so menus/selects/tooltips always render above panels.
 const Z_BASE = 20
-const Z_PINNED = 120
 
 // Only a subset of panels is remembered across reloads (the display-oriented
 // ones); analytical dialogs always start closed.
@@ -88,12 +93,21 @@ function persist(s: PanelsState) {
   })
 }
 
-/** Persist just the window-geometry map (position/size/pin/dock/fullscreen). */
+/** Persist just the window-geometry map (position/size/dock/fullscreen/order). */
 function persistWindows(s: PanelsState) {
   const out: Record<string, PanelWindowPref> = {}
   for (const [k, w] of Object.entries(s.windows)) {
     if (!w) continue
-    out[k] = { x: w.x, y: w.y, w: w.w, h: w.h, pinned: w.pinned, docked: w.docked, fullscreen: w.fullscreen }
+    out[k] = {
+      x: w.x,
+      y: w.y,
+      w: w.w,
+      h: w.h,
+      docked: w.docked,
+      fullscreen: w.fullscreen,
+      dockOrder: w.dockOrder,
+      collapsed: w.collapsed,
+    }
   }
   savePrefs({ panelWindows: out })
 }
@@ -107,10 +121,11 @@ for (const [k, p] of Object.entries(prefs.panelWindows ?? {})) {
     y: p.y,
     w: p.w,
     h: p.h,
-    z: p.pinned ? Z_PINNED + seedZ : ++seedZ,
-    pinned: !!p.pinned,
+    z: ++seedZ,
     docked: !!p.docked,
     fullscreen: !!p.fullscreen,
+    dockOrder: p.dockOrder ?? seedZ,
+    collapsed: !!p.collapsed,
   }
 }
 
@@ -138,6 +153,7 @@ export const usePanels = create<PanelsState>((set, get) => ({
   identity: false,
   motif: false,
   variant: false,
+  display: false,
   tooltip: prefs.tooltipEnabled ?? true,
   windows: savedWindows,
   zTop: seedZ,
@@ -160,7 +176,10 @@ export const usePanels = create<PanelsState>((set, get) => ({
     const z = get().zTop + 1
     set((s) => ({
       zTop: z,
-      windows: { ...s.windows, [k]: { x, y, w: seed.w, h: seed.h, z, pinned: false, docked: false, fullscreen: false } },
+      windows: {
+        ...s.windows,
+        [k]: { x, y, w: seed.w, h: seed.h, z, docked: false, fullscreen: false, dockOrder: z, collapsed: false },
+      },
     }))
     persistWindows(get())
   },
@@ -180,30 +199,62 @@ export const usePanels = create<PanelsState>((set, get) => ({
   bringToFront: (k) => {
     const cur = get().windows[k]
     if (!cur || cur.docked) return
-    const z = get().zTop + 1
-    const band = cur.pinned ? Z_PINNED : 0
-    set((s) => ({ zTop: z, windows: { ...s.windows, [k]: { ...cur, z: band + z } } }))
-  },
-  togglePinned: (k) => {
-    const cur = get().windows[k]
-    if (!cur) return
-    const pinned = !cur.pinned
-    const z = get().zTop + 1
-    set((s) => ({ zTop: z, windows: { ...s.windows, [k]: { ...cur, pinned, z: (pinned ? Z_PINNED : 0) + z } } }))
-    persistWindows(get())
+    // Re-pack floating z into a compact, bounded band so it never approaches the
+    // Mantine pop-up z-index (300) — the focused panel goes on top.
+    const floating = Object.entries(get().windows).filter(([key, w]) => w && !w.docked && key !== k) as [
+      PanelKey,
+      PanelWindow,
+    ][]
+    floating.sort((a, b) => a[1].z - b[1].z)
+    const order = [...floating.map(([key]) => key), k]
+    const windows = { ...get().windows }
+    order.forEach((key, i) => {
+      const w = windows[key]
+      if (w) windows[key] = { ...w, z: Z_BASE + i }
+    })
+    set({ windows, zTop: Z_BASE + order.length })
   },
   toggleDocked: (k) => {
     const cur = get().windows[k]
     if (!cur) return
     const docked = !cur.docked
-    // Leaving the dock drops fullscreen; entering it forces out of fullscreen too.
-    set((s) => ({ windows: { ...s.windows, [k]: { ...cur, docked, fullscreen: false } } }))
+    // Docking appends to the end of the rail; leaving it drops fullscreen.
+    const maxOrder = Math.max(0, ...Object.values(get().windows).map((w) => (w?.docked ? w.dockOrder : 0)))
+    set((s) => ({
+      windows: {
+        ...s.windows,
+        [k]: { ...cur, docked, fullscreen: false, collapsed: false, dockOrder: docked ? maxOrder + 1 : cur.dockOrder },
+      },
+    }))
     persistWindows(get())
   },
   toggleFullscreen: (k) => {
     const cur = get().windows[k]
     if (!cur) return
     set((s) => ({ windows: { ...s.windows, [k]: { ...cur, fullscreen: !cur.fullscreen } } }))
+    persistWindows(get())
+  },
+  toggleCollapsed: (k) => {
+    const cur = get().windows[k]
+    if (!cur) return
+    set((s) => ({ windows: { ...s.windows, [k]: { ...cur, collapsed: !cur.collapsed } } }))
+    persistWindows(get())
+  },
+  moveDock: (k, toIndex) => {
+    const cur = get().windows[k]
+    if (!cur || !cur.docked) return
+    const docked = (Object.entries(get().windows).filter(([, w]) => w?.docked) as [PanelKey, PanelWindow][]).sort(
+      (a, b) => a[1].dockOrder - b[1].dockOrder,
+    )
+    const keys = docked.map(([key]) => key).filter((key) => key !== k)
+    const idx = Math.max(0, Math.min(toIndex, keys.length))
+    keys.splice(idx, 0, k)
+    const windows = { ...get().windows }
+    keys.forEach((key, i) => {
+      const w = windows[key]
+      if (w) windows[key] = { ...w, dockOrder: i }
+    })
+    set({ windows })
     persistWindows(get())
   },
   setRailCollapsed: (v) => set({ railCollapsed: v }),

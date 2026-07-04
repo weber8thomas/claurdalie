@@ -2,6 +2,12 @@
 
 All notable changes to Claurdalie, newest first.
 
+## v0.12.0
+- Customizable gap / whitespace display (blank / dash / dot / cross, gap fill color, grid lines) via View → "Gaps & whitespace…"
+- Dock rail overhaul: docked panels render correctly, collapse to their header, and reorder by drag; collapsed rail becomes a "Panels" tab
+- Sequence identity is now a floating/dockable panel; pop-up menus always sit above panels
+- Editable clustering group colors (Mantine color picker) that repaint the alignment, tree, and barcode
+
 ## v0.11.0
 - Draggable / dockable analysis panels
 - Analysis UX fixes

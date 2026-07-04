@@ -21,6 +21,7 @@ import {
   IconHelpCircle,
   IconInfoCircle,
   IconMap,
+  IconAdjustments,
   IconMapPin,
   IconMaximize,
   IconMessage,
@@ -441,6 +442,7 @@ export function Toolbar({ ctrl, project, onToast, onToggleHelp, onAbout }: Props
             <CheckItem icon={<IconPalette size={ICON} />} label="Legend" checked={panels.legend} onClick={() => toggle('legend')} />
             <CheckItem icon={<IconMap size={ICON} />} label="Minimap" checked={panels.minimap} onClick={() => toggle('minimap')} />
             <CheckItem icon={<IconMessage size={ICON} />} label="Residue tooltip" checked={panels.tooltip} onClick={() => panels.setTooltip(!panels.tooltip)} />
+            <CheckItem icon={<IconAdjustments size={ICON} />} label="Gaps & whitespace…" checked={panels.display} onClick={() => toggle('display')} />
             <Menu.Divider />
             <CheckItem
               icon={snap.dark ? <IconSun size={ICON} /> : <IconMoon size={ICON} />}

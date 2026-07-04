@@ -1,16 +1,29 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ActionIcon } from '@mantine/core'
 import {
+  IconChevronDown,
+  IconChevronRight,
   IconLayoutSidebarRightCollapse,
   IconLayoutSidebarRightExpand,
   IconMaximize,
   IconMinimize,
-  IconPin,
-  IconPinnedOff,
   IconX,
 } from '@tabler/icons-react'
 import { usePanels, type PanelKey, type WindowSeed } from '../panelsStore'
+
+/** Insertion index in the dock rail for a given pointer Y (for reorder drag). */
+function dockIndexAtY(clientY: number, exclude: string): number {
+  const slot = document.getElementById('dock-rail-slot')
+  if (!slot) return 0
+  const items = [...slot.querySelectorAll<HTMLElement>('.fp.docked')].filter((el) => el.dataset.key !== exclude)
+  let i = 0
+  for (const el of items) {
+    const r = el.getBoundingClientRect()
+    if (clientY > r.top + r.height / 2) i++
+  }
+  return i
+}
 
 type Corner = 'top-right' | 'top-left' | 'bottom-right'
 type ResizeMode = 'both' | 'height' | 'width' | 'none'
@@ -76,7 +89,7 @@ export function FloatingPanel({
   minSize = DEFAULT_MIN,
   maxSize = DEFAULT_MAX,
   resize = 'both',
-  features = { fullscreen: true, pin: true, dock: true },
+  features = { fullscreen: true, dock: true },
   onGeometryChange,
   bodyClassName,
 }: FloatingPanelProps) {
@@ -85,13 +98,14 @@ export function FloatingPanel({
   const moveWindow = usePanels((s) => s.moveWindow)
   const resizeWindow = usePanels((s) => s.resizeWindow)
   const bringToFront = usePanels((s) => s.bringToFront)
-  const togglePinned = usePanels((s) => s.togglePinned)
   const toggleDocked = usePanels((s) => s.toggleDocked)
   const toggleFullscreen = usePanels((s) => s.toggleFullscreen)
+  const toggleCollapsed = usePanels((s) => s.toggleCollapsed)
+  const moveDock = usePanels((s) => s.moveDock)
 
   const seedRef = useRef<WindowSeed | null>(null)
   if (seedRef.current === null) seedRef.current = resolveSeed(defaultPos, defaultSize)
-  const geom = win ?? { ...seedRef.current, z: 20, pinned: false, docked: false, fullscreen: false }
+  const geom = win ?? { ...seedRef.current, z: 20, docked: false, fullscreen: false, dockOrder: 0, collapsed: false }
 
   // Seed the store record once on first mount.
   useEffect(() => {
@@ -103,22 +117,65 @@ export function FloatingPanel({
   const rafRef = useRef(0)
   const pendRef = useRef<{ x: number; y: number } | null>(null)
 
+  // A STABLE portal container so toggling dock ↔ float only re-parents the DOM
+  // (no React remount) — critical for canvas panels (tree/3D) whose draw state
+  // would otherwise be lost, leaving a blank canvas. We move this node between the
+  // dock-rail slot and the floating layer imperatively; React's portal target
+  // (the container) never changes, so children stay mounted.
+  const [container] = useState<HTMLDivElement | null>(() =>
+    typeof document !== 'undefined' ? document.createElement('div') : null,
+  )
+  useEffect(() => {
+    if (!container) return
+    container.className = 'fp-portal'
+    return () => container.remove()
+  }, [container])
+
   // Fire onGeometryChange after size / fullscreen / dock changes (post-layout).
   const onGeo = onGeometryChange
   useEffect(() => {
     if (!onGeo) return
     const id = requestAnimationFrame(onGeo)
     return () => cancelAnimationFrame(id)
-  }, [geom.w, geom.h, geom.fullscreen, geom.docked, onGeo])
+  }, [geom.w, geom.h, geom.fullscreen, geom.docked, geom.collapsed, onGeo])
 
   const docked = !!(features.dock && geom.docked)
   const fullscreen = !!(features.fullscreen && geom.fullscreen) && !docked
+  const collapsed = docked && geom.collapsed
   const effResize: ResizeMode = docked ? 'height' : resize
 
+  // Re-parent the stable container into the dock rail or the floating layer.
+  useEffect(() => {
+    if (!container) return
+    const parent = document.getElementById(docked ? 'dock-rail-slot' : 'floating-layer')
+    if (parent && container.parentElement !== parent) parent.appendChild(container)
+  }, [container, docked])
+
   // ---- drag (title bar) --------------------------------------------------
+  // Floating: move the window. Docked: reorder within the rail.
   const onHeadPointerDown = (e: React.PointerEvent) => {
-    if (fullscreen || docked || e.button !== 0) return
+    if (fullscreen || e.button !== 0) return
     if ((e.target as HTMLElement).closest('.fp-btn')) return // button, not a drag
+
+    if (docked) {
+      const sy = e.clientY
+      let moved = false
+      const move = (ev: PointerEvent) => {
+        if (!moved && Math.abs(ev.clientY - sy) < 6) return
+        moved = true
+        document.body.classList.add('fp-dragging')
+        moveDock(panelKey, dockIndexAtY(ev.clientY, panelKey))
+      }
+      const up = () => {
+        window.removeEventListener('pointermove', move)
+        window.removeEventListener('pointerup', up)
+        document.body.classList.remove('fp-dragging')
+      }
+      window.addEventListener('pointermove', move)
+      window.addEventListener('pointerup', up)
+      return
+    }
+
     bringToFront(panelKey)
     const sx = e.clientX
     const sy = e.clientY
@@ -199,16 +256,19 @@ export function FloatingPanel({
   const body = (
     <div
       ref={rootRef}
+      data-key={panelKey}
       className={
         'fp' +
         (fullscreen ? ' fullscreen' : '') +
         (docked ? ' docked' : '') +
-        (geom.pinned ? ' pinned' : '') +
+        (collapsed ? ' collapsed' : '') +
         (bodyClassName ? ' ' + bodyClassName : '')
       }
       style={
         docked
-          ? { height: geom.h }
+          ? collapsed
+            ? { order: geom.dockOrder }
+            : { height: geom.h, order: geom.dockOrder }
           : fullscreen
             ? undefined
             : { left: geom.x, top: geom.y, width: geom.w, height: geom.h, zIndex: geom.z }
@@ -216,28 +276,28 @@ export function FloatingPanel({
       onPointerDownCapture={() => !docked && bringToFront(panelKey)}
     >
       <div className="fp-head" onPointerDown={onHeadPointerDown}>
-        <span className="panel-title fp-title">{title}</span>
-        {controls}
-        {features.pin && (
+        {docked && (
           <ActionIcon
             className="fp-btn"
             variant="subtle"
-            color={geom.pinned ? 'teal' : 'gray'}
+            color="gray"
             size="sm"
-            title={geom.pinned ? 'Unpin (allow other panels on top)' : 'Pin on top'}
-            onClick={() => togglePinned(panelKey)}
-            aria-label="Pin on top"
+            title={collapsed ? 'Expand' : 'Collapse'}
+            onClick={() => toggleCollapsed(panelKey)}
+            aria-label="Collapse panel"
           >
-            {geom.pinned ? <IconPin size={15} /> : <IconPinnedOff size={15} />}
+            {collapsed ? <IconChevronRight size={15} /> : <IconChevronDown size={15} />}
           </ActionIcon>
         )}
+        <span className="panel-title fp-title">{title}</span>
+        {!collapsed && controls}
         {features.dock && (
           <ActionIcon
             className="fp-btn"
             variant="subtle"
             color={docked ? 'teal' : 'gray'}
             size="sm"
-            title={docked ? 'Undock (float)' : 'Dock to side panel'}
+            title={docked ? 'Undock (float as a window)' : 'Dock into the side panel'}
             onClick={() => toggleDocked(panelKey)}
             aria-label="Dock to side"
           >
@@ -262,16 +322,13 @@ export function FloatingPanel({
         </ActionIcon>
       </div>
 
-      <div className="fp-body">{children}</div>
+      {!collapsed && <div className="fp-body">{children}</div>}
 
       {!fullscreen &&
+        !collapsed &&
         handles.map((d) => <div key={d} className={`fp-rz fp-rz-${d}`} onPointerDown={startResize(d)} />)}
     </div>
   )
 
-  if (docked) {
-    const slot = typeof document !== 'undefined' ? document.getElementById('dock-rail-slot') : null
-    return slot ? createPortal(body, slot) : null
-  }
-  return body
+  return container ? createPortal(body, container) : null
 }

@@ -13,6 +13,9 @@ export const SB = 11 // scrollbar thickness
 const TEXT_THRESHOLD = 6 // px/cell below which we stop drawing letters (block mode)
 const MATCH_GLYPH: RGB = rgb(255, 255, 255) // white letters over the motif red band
 
+/** How gap cells are drawn in the detailed (zoomed-in) view. */
+export type GapGlyph = 'blank' | 'dash' | 'dot' | 'cross'
+
 export interface ScrollbarHit {
   axis: 'h' | 'v'
   trackStart: number
@@ -71,6 +74,12 @@ export class GridRenderer {
   cellH = 18
   scheme!: ColorScheme
   theme: CanvasTheme = LIGHT_CANVAS
+  /** How gap cells render in detail view: nothing, a dash, or a centered dot. */
+  gapGlyph: GapGlyph = 'blank'
+  /** Optional fill color (packed RGB) for gap cells; null = grid background. */
+  gapFill: RGB | null = null
+  /** Draw the faint per-column grid lines (when cells are large enough). */
+  showGridLines = true
   /** Optional per-row group color (CSS), drawn as a gutter stripe. Set by GroupModel. */
   groupColorOf: ((visualRow: number) => string | null) | null = null
   /** Optional motif match overlay (Ordalie high-contrast mode). Set by MotifModel. */
@@ -357,7 +366,7 @@ export class GridRenderer {
     else this.paintBlockImage(vis)
 
     // Faint grid lines when cells are large enough to warrant them.
-    if (this.cellW >= 10) {
+    if (this.showGridLines && this.cellW >= 10) {
       const bottom = Math.min(this.cssH, this.cellY(this.store.height))
       ctx.strokeStyle = toCss(this.theme.gridLine)
       ctx.lineWidth = 1
@@ -392,6 +401,8 @@ export class GridRenderer {
           if (code !== GAP_CODE) {
             const stats = useStats ? this.stats.get(c) : null
             color = this.scheme.bg({ code, col: c, stats })
+          } else {
+            color = this.gapFill // null keeps the grid background
           }
         }
         if (color !== runColor) {
@@ -409,12 +420,39 @@ export class GridRenderer {
     const dh = this.cellH
     const gw = this.atlas.cellGlyphWidth
     const gh = this.atlas.cellGlyphHeight
+    // Gap symbol setup (dash reuses the atlas' '-' glyph; dot is drawn directly).
+    const gapColor = this.theme.mutedText
+    const gapAtlas = this.gapGlyph === 'dash' ? this.atlas.atlas(gapColor) : null
     for (let v = vis.firstRow; v < vis.lastRow; v++) {
       const y = this.cellY(v)
       const row = this.store.getRow(this.store.rowIdAt(v))
       for (let c = vis.firstCol; c < vis.lastCol; c++) {
         const code = residueOf(row, c)
-        if (code === GAP_CODE) continue
+        if (code === GAP_CODE) {
+          const cxp = this.cellX(c) + dw / 2
+          const cyp = y + dh / 2
+          if (this.gapGlyph === 'dash' && gapAtlas) {
+            ctx.drawImage(gapAtlas as unknown as CanvasImageSource, this.atlas.glyphX(GAP_CODE), 0, gw, gh, this.cellX(c), y, dw, dh)
+          } else if (this.gapGlyph === 'dot') {
+            const r = Math.max(1, Math.min(dw, dh) * 0.1)
+            ctx.fillStyle = toCss(gapColor)
+            ctx.beginPath()
+            ctx.arc(cxp, cyp, r, 0, Math.PI * 2)
+            ctx.fill()
+          } else if (this.gapGlyph === 'cross') {
+            // Centered plus: a vertical + horizontal stroke through the cell middle.
+            const arm = Math.max(1.5, Math.min(dw, dh) * 0.22)
+            ctx.strokeStyle = toCss(gapColor)
+            ctx.lineWidth = Math.max(1, Math.min(dw, dh) * 0.06)
+            ctx.beginPath()
+            ctx.moveTo(cxp - arm, cyp)
+            ctx.lineTo(cxp + arm, cyp)
+            ctx.moveTo(cxp, cyp - arm)
+            ctx.lineTo(cxp, cyp + arm)
+            ctx.stroke()
+          }
+          continue
+        }
         const stats = useStats ? this.stats.get(c) : null
         const fg = this.scheme.fg({ code, col: c, stats })
         const atlas = this.atlas.atlas(fg)
@@ -448,6 +486,8 @@ export class GridRenderer {
     const buf = new Uint32Array(img.data.buffer)
 
     const gridU32 = packABGR(this.theme.gridBg)
+    // Gap cells use the configured gap fill (or the grid background) even zoomed out.
+    const gapU32 = this.gapFill != null ? packABGR(this.gapFill) : gridU32
     const cw = this.cellW
     const ch = this.cellH
     const rows = this.store.height
@@ -476,7 +516,7 @@ export class GridRenderer {
         const base = px * K
         cx.col = col
         cx.stats = this.stats.get(col)
-        colTable[base + GAP_CODE] = gridU32
+        colTable[base + GAP_CODE] = gapU32
         for (let code = 1; code < K; code++) {
           cx.code = code
           const c = this.scheme.bg(cx)
@@ -501,7 +541,7 @@ export class GridRenderer {
     } else {
       // Static scheme: one column-independent color per residue code.
       const table = new Uint32Array(K)
-      table[GAP_CODE] = gridU32
+      table[GAP_CODE] = gapU32
       const cx = this.bgCtx
       cx.col = 0
       cx.stats = null
