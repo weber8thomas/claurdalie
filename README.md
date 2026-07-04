@@ -64,6 +64,8 @@ npm test           # unit + property tests
 
 Or use the Makefile: `make dev`, `make build`, `make check`.
 
+See [CHANGELOG.md](CHANGELOG.md) for the version history.
+
 ## Keyboard shortcuts
 
 | Keys | Action |
