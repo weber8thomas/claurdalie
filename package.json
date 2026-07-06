@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.12.3",
   "type": "module",
-  "description": "High-performance web-based multiple sequence alignment (MSA) editor",
+  "description": "Browser-based multiple sequence alignment (MSA) editor and analysis workbench — 100% client-side, smooth on very large alignments",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
