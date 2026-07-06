@@ -1,9 +1,8 @@
-# Claurdalie
+# Claurdalie — browser-based MSA editor & analysis workbench
 
-A fast, browser-based **multiple sequence alignment (MSA) editor and analysis
-workbench**. It stays smooth on very large alignments — thousands of sequences ×
-tens of thousands of columns — and runs **100% in your browser**. Nothing is
-uploaded; your data never leaves the page.
+Explore, edit, and analyze multiple sequence alignments entirely in your browser
+— smooth on thousands of sequences × tens of thousands of columns, with nothing
+ever uploaded.
 
 It's a lightweight, static-hosted reimagining of the
 [Ordalie](https://lbgi.fr/ordalie) desktop tool.
